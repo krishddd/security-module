@@ -1,0 +1,234 @@
+{
+  "schema_version": "3.0",
+  "profile_name": "anythingllm_demo",
+  "profile_agent_id": "",
+  "categories": [
+    {
+      "category": "ASI01",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI02",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI03",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI05",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI08",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI10",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT01",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT02",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT03",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT10",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT11",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT14",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT16",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT17",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI04",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI06",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI07",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI09",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT04",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT05",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT06",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT07",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT08",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT12",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT13",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT15",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT09",
+      "include": true,
+      "priority": 50,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    }
+  ],
+  "cost_estimate": {
+    "projected_llm_calls": 0,
+    "projected_input_tokens": 0,
+    "projected_output_tokens": 0,
+    "projected_usd": 0.0,
+    "notes": [
+      "stub planner: no LLM calls projected"
+    ]
+  },
+  "planner": "stub",
+  "notes": "Phase-3 stub planner — every applicable category runs with seed payloads only."
+}

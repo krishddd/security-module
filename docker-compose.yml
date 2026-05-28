@@ -1,0 +1,35 @@
+version: "3.9"
+
+# Optional: standalone OOB callback server container
+# The callback_server.py runs in-process by default.
+# Use this docker-compose only if you want an isolated OOB server.
+
+services:
+  oob-callback:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "9999:9999"
+    command: >
+      python -c "
+      import asyncio
+      import sys
+      sys.path.insert(0, '/app')
+      from core.callback_server import CallbackServer
+      async def main():
+          srv = CallbackServer(host='0.0.0.0', port=9999)
+          await srv.start()
+          print('OOB callback server running on 0.0.0.0:9999')
+          await asyncio.Event().wait()
+      asyncio.run(main())
+      "
+    environment:
+      - ASI_CALLBACK_HOST=0.0.0.0
+      - ASI_CALLBACK_PORT=9999
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9999/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

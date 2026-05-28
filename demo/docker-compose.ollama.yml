@@ -1,0 +1,28 @@
+# Ollama for the ASI v3 demo.
+#
+# Usage:
+#   cd Security_module/demo
+#   docker compose -f docker-compose.ollama.yml up -d
+#   docker exec ollama_demo ollama pull qwen2.5:0.5b    # ~400 MB, ~30 s
+#   curl http://127.0.0.1:11434/api/tags                 # confirm
+#
+# Cleanup:
+#   docker compose -f docker-compose.ollama.yml down -v
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_demo
+    ports:
+      - "127.0.0.1:11434:11434"   # bind to localhost only (NOT 0.0.0.0)
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

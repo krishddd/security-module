@@ -1,0 +1,79 @@
+{
+  "_comment": "Damn Vulnerable AI Agent (DVAA) — port 7003 (LegacyBot) has all vulnerabilities enabled. Start DVAA with: git clone https://github.com/opena2a-org/damn-vulnerable-ai-agent && cd damn-vulnerable-ai-agent && docker compose up. See demo/README.md for details.",
+  "schema_version": "3.0",
+  "name": "dvaa_legacybot",
+  "agent_id": "",
+  "base_url": "http://127.0.0.1:7003",
+  "transport": "rest",
+  "auth": {
+    "scheme": "none",
+    "token_env_var": null,
+    "header_name": "Authorization",
+    "header_prefix": "Bearer ",
+    "refresh_endpoint": null
+  },
+  "endpoints": [
+    {
+      "path": "/health",
+      "method": "GET",
+      "purpose": "health",
+      "request_schema": null,
+      "response_schema": null,
+      "auth_required": false,
+      "tags": ["health"],
+      "operation_id": "health",
+      "summary": "Health probe"
+    },
+    {
+      "path": "/info",
+      "method": "GET",
+      "purpose": "memory_read",
+      "request_schema": null,
+      "response_schema": null,
+      "auth_required": false,
+      "tags": ["meta"],
+      "operation_id": "info",
+      "summary": "Agent metadata + tool list"
+    },
+    {
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "purpose": "chat",
+      "request_schema": {
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+          "model": {"type": "string", "enum": ["gpt-3.5-turbo", "default"]},
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {"type": "string"},
+                "content": {"type": "string"}
+              }
+            }
+          },
+          "temperature": {"type": "number"},
+          "max_tokens": {"type": "integer"}
+        }
+      },
+      "response_schema": null,
+      "auth_required": false,
+      "tags": ["chat"],
+      "operation_id": "chat_completions",
+      "summary": "OpenAI-compatible chat completions (vulnerable to prompt injection, tool misuse, info disclosure)"
+    }
+  ],
+  "tools": [],
+  "inferred_capabilities": ["tool_invoke", "sql_query", "web_browse"],
+  "data_domains": [],
+  "risk_tier": "high",
+  "risk_tier_source": "user",
+  "rate_limit": {
+    "requests_per_minute": 120,
+    "burst": 15,
+    "max_retries_on_429": 3
+  },
+  "notes": "DVAA LegacyBot — all vulnerabilities deliberately enabled. Switch base_url port to 7001 (SecureBot) for a hardened baseline comparison."
+}

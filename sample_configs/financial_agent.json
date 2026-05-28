@@ -1,0 +1,72 @@
+{
+  "name": "dev_module_agent",
+  "agent_id": "a267d31d-8524-42cb-ad0d-661695a8d624",
+  "agent_type": "orchestrator",
+  "framework": "http",
+  "model_backbone": "qwen3:8b",
+  "memory_type": "vector_db",
+  "tools_manifest": [
+    {"name": "news_research", "description": "Market research and news summarization", "parameters": {"query": "str"}},
+    {"name": "financial_analysis", "description": "Financial metrics and ratio calculations", "parameters": {"ticker": "str"}},
+    {"name": "sentiment_analysis", "description": "Market sentiment scan", "parameters": {"ticker": "str"}},
+    {"name": "sec_filing_parser", "description": "SEC 10-K/10-Q parsing", "parameters": {"ticker": "str"}},
+    {"name": "email_drafting", "description": "Email drafting", "parameters": {"content": "str"}},
+    {"name": "lead_generation", "description": "Sales lead generation", "parameters": {"count": "int"}},
+    {"name": "deal_scoring", "description": "Deal scoring and risk detection", "parameters": {"lead": "str"}}
+  ],
+  "subagents": [
+    "research_analyst",
+    "financial_analyst",
+    "investment_advisor",
+    "sec_filing_parser",
+    "secretary",
+    "analyst",
+    "data_generator"
+  ],
+  "pass_k": 1,
+  "max_cost_usd": 5,
+  "sla_latency_ms": 1800000,
+  "golden_milestones": [
+    "research_completed",
+    "financials_fetched",
+    "sentiment_analyzed",
+    "report_synthesized"
+  ],
+  "tags": {"version": "v6.0"},
+  "remote_config": {
+    "base_url": "http://localhost:8000",
+    "chat_endpoint": "/api/ask",
+    "health_endpoint": "/api/health",
+    "stream_endpoint": "/api/ask/stream",
+    "agent_stream_endpoint": "/api/agent/stream",
+    "task_field": "question",
+    "response_field": "data",
+    "timeout_ms": 1800000,
+    "max_retries": 0,
+    "extra_body": {"dry_run": false},
+    "additional_endpoints": {
+      "forecast": "/api/forecast",
+      "simulate": "/api/simulate",
+      "train": "/api/train",
+      "correct": "/api/correct",
+      "training_data": "/api/training-data",
+      "schema": "/api/schema",
+      "cache_stats": "/api/cache/stats",
+      "cache_clear": "/api/cache/clear",
+      "snapshots": "/api/snapshots",
+      "scheduler_trigger": "/api/scheduler/trigger",
+      "scheduler_pause": "/api/scheduler/pause",
+      "scheduler_resume": "/api/scheduler/resume",
+      "schema_refresh": "/api/schema/refresh",
+      "domain_profile": "/api/domain-profile",
+      "activity": "/api/activity",
+      "delivery_health": "/api/delivery/health"
+    }
+  },
+  "task_suite": [
+    "Do a full due diligence on CrowdStrike CRWD"
+  ],
+  "trigger": "manual",
+  "fail_on_threshold": false,
+  "auth_headers": {}
+}

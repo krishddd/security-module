@@ -1,0 +1,59 @@
+{
+  "_comment": "Dify — production LLMops platform, 138k+ GitHub stars, multi-service docker compose. Default port 80 (nginx). Service API at /v1/* uses Bearer token from a published app. Get a key by: setup Dify -> create chatbot app -> Publish -> API Access -> 'API Secret Key'. Export it as DIFY_APP_TOKEN before scanning. See demo/DIFY_DEMO.md.",
+  "schema_version": "3.0",
+  "name": "dify_chatbot",
+  "agent_id": "",
+  "base_url": "http://127.0.0.1:80",
+  "transport": "rest",
+  "auth": {
+    "scheme": "bearer",
+    "token_env_var": "DIFY_APP_TOKEN",
+    "header_name": "Authorization",
+    "header_prefix": "Bearer ",
+    "refresh_endpoint": null
+  },
+  "endpoints": [
+    {"path": "/v1/info",                "method": "GET",  "purpose": "memory_read",  "auth_required": true, "tags": ["app","info"],         "operation_id": "app_info",       "summary": "App metadata"},
+    {"path": "/v1/parameters",          "method": "GET",  "purpose": "memory_read",  "auth_required": true, "tags": ["app","parameters"],   "operation_id": "app_parameters", "summary": "App config / system prompt parameters (sensitive)"},
+    {"path": "/v1/meta",                "method": "GET",  "purpose": "memory_read",  "auth_required": true, "tags": ["app","meta"],         "operation_id": "app_meta",       "summary": "App tools metadata"},
+    {"path": "/v1/site",                "method": "GET",  "purpose": "memory_read",  "auth_required": false,"tags": ["app","site"],         "operation_id": "app_site",       "summary": "Public app site info"},
+    {"path": "/v1/chat-messages",       "method": "POST", "purpose": "chat",         "auth_required": true, "tags": ["chat"],               "operation_id": "chat_messages",
+     "summary": "Send chat message (with conversation history)",
+     "request_schema": {"type": "object", "required": ["query","user"],
+        "properties": {"query": {"type": "string"}, "user": {"type": "string"},
+                        "conversation_id": {"type": "string"}, "response_mode": {"type": "string"},
+                        "inputs": {"type": "object"}, "files": {"type": "array"}}}},
+    {"path": "/v1/completion-messages", "method": "POST", "purpose": "chat",         "auth_required": true, "tags": ["completion"],         "operation_id": "completion_messages",
+     "summary": "Single-shot completion",
+     "request_schema": {"type": "object", "properties": {"inputs": {"type": "object"}, "query": {"type": "string"},
+                        "user": {"type": "string"}, "response_mode": {"type": "string"}}}},
+    {"path": "/v1/workflows/run",       "method": "POST", "purpose": "tool_invoke",  "auth_required": true, "tags": ["workflows","run"],    "operation_id": "workflow_run",
+     "summary": "Run a workflow (multi-step agent execution)",
+     "request_schema": {"type": "object", "properties": {"inputs": {"type": "object"}, "user": {"type": "string"}, "response_mode": {"type": "string"}}}},
+    {"path": "/v1/files/upload",        "method": "POST", "purpose": "file_io",      "auth_required": true, "tags": ["files","upload"],     "operation_id": "file_upload",    "summary": "Upload a file for chat/workflow consumption (path traversal / arbitrary upload risk)"},
+    {"path": "/v1/audio-to-text",       "method": "POST", "purpose": "tool_invoke",  "auth_required": true, "tags": ["audio","stt"],        "operation_id": "audio_to_text",  "summary": "Speech-to-text"},
+    {"path": "/v1/text-to-audio",       "method": "POST", "purpose": "tool_invoke",  "auth_required": true, "tags": ["audio","tts"],        "operation_id": "text_to_audio",  "summary": "Text-to-speech"},
+    {"path": "/v1/messages",            "method": "GET",  "purpose": "memory_read",  "auth_required": true, "tags": ["messages"],           "operation_id": "list_messages",  "summary": "List conversation messages"},
+    {"path": "/v1/conversations",       "method": "GET",  "purpose": "memory_read",  "auth_required": true, "tags": ["conversations"],      "operation_id": "list_conversations","summary": "List conversations (cross-user info disclosure risk)"},
+    {"path": "/v1/conversations",       "method": "DELETE","purpose": "memory_write","auth_required": true, "tags": ["conversations","delete"], "operation_id": "delete_conv","summary": "Delete a conversation"},
+    {"path": "/v1/health",              "method": "GET",  "purpose": "health",       "auth_required": false,"tags": ["health"],             "operation_id": "health",         "summary": "Liveness"},
+    {"path": "/console/api/setup",      "method": "GET",  "purpose": "auth",         "auth_required": false,"tags": ["admin","setup"],      "operation_id": "console_setup_status","summary": "Initial setup status (admin endpoint)"},
+    {"path": "/console/api/version",    "method": "GET",  "purpose": "memory_read",  "auth_required": false,"tags": ["admin","version"],    "operation_id": "console_version","summary": "Console version (info disclosure)"}
+  ],
+  "tools": [
+    {"name": "chat_messages",     "description": "Multi-turn chat with conversation history",       "parameters": {"query":"str","user":"str"}, "inferred_capability": "tool_invoke"},
+    {"name": "workflow_run",      "description": "Execute multi-step agent workflow",                "parameters": {"inputs":"object"},          "inferred_capability": "subagent_dispatch"},
+    {"name": "file_upload",       "description": "Upload arbitrary files for agent context",         "parameters": {"file":"binary"},            "inferred_capability": "file_write"},
+    {"name": "completion",        "description": "Single-shot LLM completion",                       "parameters": {"query":"str"},              "inferred_capability": "tool_invoke"},
+    {"name": "audio_to_text",     "description": "Transcribe audio to text",                         "parameters": {"file":"binary"},            "inferred_capability": "tool_invoke"},
+    {"name": "list_conversations","description": "Enumerate conversation history",                   "parameters": {"user":"str"},               "inferred_capability": "memory_persist"}
+  ],
+  "inferred_capabilities": [
+    "tool_invoke", "memory_persist", "file_read", "file_write", "subagent_dispatch", "web_browse", "sql_query"
+  ],
+  "data_domains": [],
+  "risk_tier": "high",
+  "risk_tier_source": "user",
+  "rate_limit": {"requests_per_minute": 60, "burst": 10, "max_retries_on_429": 3},
+  "notes": "Dify chatbot app. To scan: 1) docker compose up Dify, 2) finish setup at http://localhost/install, 3) create a chatbot app, 4) Publish -> API Access -> copy the API Secret Key, 5) set DIFY_APP_TOKEN env var, 6) run scan-v3. The /console/api/* endpoints are tested without auth (intentional — should return 401)."
+}

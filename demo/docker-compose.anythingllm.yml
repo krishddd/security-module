@@ -1,0 +1,38 @@
+# AnythingLLM for the ASI v3 demo.
+#
+# Single container, no external dependencies. Image is ~1.5 GB.
+#
+# Usage:
+#   cd Security_module/demo
+#   docker compose -f docker-compose.anythingllm.yml up -d
+#   # browse to http://localhost:3001, do 30-second setup, get API key
+#
+# Cleanup:
+#   docker compose -f docker-compose.anythingllm.yml down -v
+
+services:
+  anythingllm:
+    image: mintplexlabs/anythingllm:latest
+    container_name: anythingllm_demo
+    ports:
+      - "127.0.0.1:3001:3001"        # bind to localhost only
+    environment:
+      # Storage location inside the container
+      STORAGE_DIR: /app/server/storage
+      # Disable telemetry for the demo
+      DISABLE_TELEMETRY: "true"
+    volumes:
+      - anythingllm_storage:/app/server/storage
+      - anythingllm_hotdir:/app/collector/hotdir
+      - anythingllm_outputs:/app/collector/outputs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3001/api/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  anythingllm_storage:
+  anythingllm_hotdir:
+  anythingllm_outputs:

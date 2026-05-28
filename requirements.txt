@@ -1,0 +1,35 @@
+# OWASP ASI Top 10 Security Testing Platform
+# Core
+httpx>=0.27.0
+pydantic>=2.0
+pydantic-settings>=2.0
+python-dotenv>=1.0.0
+
+# CLI & Console
+click>=8.0
+rich>=13.0
+
+# Reporting
+jinja2>=3.0
+
+# Semantic Detection
+rapidfuzz>=3.0
+
+# OOB Callback Server
+aiohttp>=3.9.0
+
+# Testing
+pytest>=8.0
+pytest-asyncio>=0.23.0
+
+# Stub agent (test-only — vulnerable FastAPI fixture)
+fastapi>=0.110.0
+uvicorn>=0.27.0
+
+# LLM layer (optional — only required when --llm flag is used)
+# Install either or both; the framework auto-detects based on which API key is set.
+anthropic>=0.40.0
+openai>=1.50.0
+
+# Loads .env at CLI startup (silent if absent)
+python-dotenv>=1.0.0

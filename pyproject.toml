@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "owasp-asi-security-tester"
+version = "1.0.0"
+description = "OWASP ASI Top 10 Security Testing Platform for Agentic AI Systems"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "jinja2>=3.0",
+    "rapidfuzz>=3.0",
+    "aiohttp>=3.9.0",
+]
+
+[project.optional-dependencies]
+network = [
+    "langchain>=0.3.0",
+    "langgraph>=0.2.0",
+    "langchain-ollama>=0.2.0",
+    "langchain-core>=0.3.0",
+    "filelock>=3.13",
+    "tiktoken>=0.7.0",
+    # YAML loader for CVE checks + c2_profile
+    "pyyaml>=6.0",
+    # Cross-engagement RAG cosine similarity; pure-python fallback exists
+    "numpy>=1.24",
+    # Pure-Python redesign deps (replaces all Go/binary dependencies)
+    "httpx>=0.25",
+    "pydantic>=2.0",
+    "dnspython>=2.4",          # DNS resolution (replaces dnsx binary)
+    "beautifulsoup4>=4.12",    # JS endpoint extraction (replaces getJS/LinkFinder)
+    "lxml>=5.0",               # BeautifulSoup parser backend
+    "pyjwt>=2.8",              # JWT scanning (replaces jwt_tool binary)
+    "cryptography>=42.0",      # TLS audit + JWT crypto (replaces ssl-only approach)
+    # python-whois is optional; RDAP fallback works without it
+    # "python-whois>=0.9",     # uncomment to enable whois lib fallback
+]
+network-browser = [
+    # Optional Playwright browser layer for DOM XSS + auth flows.
+    # After installing: playwright install chromium
+    "playwright>=1.40",
+]
+network-precise = [
+    "transformers>=4.40",
+    "tokenizers>=0.19",
+]
+# HTTP service — lets operators click-run engagements via a curated allowlist UI.
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["network_pipeline*"]
+
+[tool.setuptools.package-data]
+"network_pipeline.skills.checks.wordlists" = ["*.txt"]
+"network_pipeline.skills.checks" = ["params.txt", "cves/*.yaml"]
+"network_pipeline.agents.prompts" = ["*.md"]
+"network_pipeline.skills" = ["**/*.md", "**/*.yaml"]
+
+[project.scripts]
+asi-scan = "cli:cli"
+network-pipeline = "network_pipeline.cli:cli"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests_asi"]
+log_cli = true
+log_cli_level = "INFO"

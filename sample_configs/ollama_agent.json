@@ -1,0 +1,49 @@
+{
+  "_comment": "Ollama — production LLM runtime, 300k+ public deployments, CVE-2026-7482 (Bleeding Llama). Default port 11434, no auth by default. Start with: docker run -d -p 11434:11434 --name ollama ollama/ollama  AND  docker exec ollama ollama pull qwen2.5:0.5b. Then run: python cli.py scan-v3 --profile sample_configs/ollama_agent.json --llm",
+  "schema_version": "3.0",
+  "name": "ollama_local",
+  "agent_id": "",
+  "base_url": "http://127.0.0.1:11434",
+  "transport": "rest",
+  "auth": {"scheme": "none", "token_env_var": null, "header_name": "Authorization", "header_prefix": "Bearer ", "refresh_endpoint": null},
+  "endpoints": [
+    {"path": "/api/version",     "method": "GET",    "purpose": "health",       "auth_required": false, "tags": ["meta","version"],      "operation_id": "version",     "summary": "Ollama version info"},
+    {"path": "/api/tags",        "method": "GET",    "purpose": "memory_read",  "auth_required": false, "tags": ["models","list"],       "operation_id": "list_models", "summary": "List locally available models"},
+    {"path": "/api/ps",          "method": "GET",    "purpose": "memory_read",  "auth_required": false, "tags": ["models","running"],    "operation_id": "list_running","summary": "List currently loaded models"},
+    {"path": "/api/show",        "method": "POST",   "purpose": "memory_read",  "auth_required": false, "tags": ["models","show"],       "operation_id": "show_model",  "summary": "Show model info, parameters, and system prompts",
+     "request_schema": {"type": "object", "properties": {"name": {"type": "string"}}}},
+    {"path": "/api/generate",    "method": "POST",   "purpose": "chat",         "auth_required": false, "tags": ["chat","generate"],     "operation_id": "generate",    "summary": "Generate a response for a given prompt",
+     "request_schema": {"type": "object", "properties": {"model": {"type": "string"}, "prompt": {"type": "string"}, "stream": {"type": "boolean"}}}},
+    {"path": "/api/chat",        "method": "POST",   "purpose": "chat",         "auth_required": false, "tags": ["chat"],                "operation_id": "chat",        "summary": "Chat completion with conversation history",
+     "request_schema": {"type": "object", "properties": {"model": {"type": "string"}, "messages": {"type": "array"}, "stream": {"type": "boolean"}}}},
+    {"path": "/api/embed",       "method": "POST",   "purpose": "tool_invoke",  "auth_required": false, "tags": ["embeddings"],          "operation_id": "embed",       "summary": "Generate embeddings"},
+    {"path": "/api/embeddings",  "method": "POST",   "purpose": "tool_invoke",  "auth_required": false, "tags": ["embeddings","legacy"], "operation_id": "embeddings",  "summary": "Legacy embeddings endpoint"},
+    {"path": "/api/create",      "method": "POST",   "purpose": "memory_write", "auth_required": false, "tags": ["models","create"],     "operation_id": "create_model","summary": "Create a model from GGUF / Modelfile"},
+    {"path": "/api/copy",        "method": "POST",   "purpose": "memory_write", "auth_required": false, "tags": ["models","copy"],       "operation_id": "copy_model",  "summary": "Duplicate a model"},
+    {"path": "/api/delete",      "method": "DELETE", "purpose": "memory_write", "auth_required": false, "tags": ["models","delete"],     "operation_id": "delete_model","summary": "Remove a model (NO AUTH — destructive)"},
+    {"path": "/api/pull",        "method": "POST",   "purpose": "tool_invoke",  "auth_required": false, "tags": ["models","pull"],       "operation_id": "pull_model",  "summary": "Download a model from the Ollama library"},
+    {"path": "/api/push",        "method": "POST",   "purpose": "tool_invoke",  "auth_required": false, "tags": ["models","push"],       "operation_id": "push_model",  "summary": "Upload a model to the library"},
+    {"path": "/v1/models",       "method": "GET",    "purpose": "memory_read",  "auth_required": false, "tags": ["openai","models"],     "operation_id": "openai_models","summary": "OpenAI-compatible model list"},
+    {"path": "/v1/chat/completions","method":"POST", "purpose": "chat",         "auth_required": false, "tags": ["openai","chat"],       "operation_id": "openai_chat",
+     "summary": "OpenAI-compatible chat completions",
+     "request_schema": {"type": "object", "properties": {"model": {"type": "string"}, "messages": {"type": "array"}, "temperature": {"type": "number"}}}},
+    {"path": "/v1/completions",  "method": "POST",   "purpose": "chat",         "auth_required": false, "tags": ["openai","completions"], "operation_id": "openai_completions", "summary": "OpenAI-compatible completions"},
+    {"path": "/v1/embeddings",   "method": "POST",   "purpose": "tool_invoke",  "auth_required": false, "tags": ["openai","embeddings"], "operation_id": "openai_embeddings", "summary": "OpenAI-compatible embeddings"}
+  ],
+  "tools": [
+    {"name": "chat",          "description": "Generate chat completion via /api/chat",       "parameters": {"messages": "array"}, "inferred_capability": "tool_invoke"},
+    {"name": "show_model",    "description": "Reveal a model's system prompt + parameters",  "parameters": {"name": "str"},        "inferred_capability": "memory_persist"},
+    {"name": "pull_model",    "description": "Download arbitrary model from library",        "parameters": {"name": "str"},        "inferred_capability": "web_browse"},
+    {"name": "delete_model",  "description": "Destructively remove a model — no auth",       "parameters": {"name": "str"},        "inferred_capability": "file_write"},
+    {"name": "create_model",  "description": "Create model from Modelfile (file write)",     "parameters": {"name": "str"},        "inferred_capability": "file_write"},
+    {"name": "embed",         "description": "Generate text embeddings",                     "parameters": {"input": "str"},        "inferred_capability": "tool_invoke"}
+  ],
+  "inferred_capabilities": [
+    "tool_invoke", "web_browse", "memory_persist", "file_read", "file_write", "sql_query"
+  ],
+  "data_domains": [],
+  "risk_tier": "high",
+  "risk_tier_source": "user",
+  "rate_limit": {"requests_per_minute": 120, "burst": 15, "max_retries_on_429": 3},
+  "notes": "Ollama default install. Known issues we expect the scanner to flag: (1) no authentication on any endpoint, (2) /api/show leaks model system prompts, (3) /api/pull lets anyone download arbitrary models (DoS via large models, supply-chain risk), (4) /api/delete destroys models without auth, (5) /api/version leaks build info. CVE-2026-7482 references this exact attack surface."
+}

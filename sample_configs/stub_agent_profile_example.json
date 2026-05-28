@@ -1,0 +1,77 @@
+{
+  "_comment": "Example AgentProfile produced by running `cli.py discover` against the in-repo FastAPI stub agent. Reference shape for v3 profiles generated from OpenAPI specs.",
+  "schema_version": "3.0",
+  "name": "stub",
+  "agent_id": "",
+  "base_url": "http://127.0.0.1:9100",
+  "transport": "rest",
+  "auth": {
+    "scheme": "none",
+    "token_env_var": null,
+    "header_name": "Authorization",
+    "header_prefix": "Bearer ",
+    "refresh_endpoint": null
+  },
+  "endpoints": [
+    {
+      "path": "/healthz",
+      "method": "GET",
+      "purpose": "health",
+      "auth_required": false,
+      "tags": ["health"],
+      "operation_id": "healthz_healthz_get",
+      "summary": "Health probe"
+    },
+    {
+      "path": "/chat",
+      "method": "POST",
+      "purpose": "chat",
+      "auth_required": false,
+      "tags": ["chat"],
+      "operation_id": "chat_chat_post",
+      "summary": "Conversational interface"
+    },
+    {
+      "path": "/sql_tool",
+      "method": "POST",
+      "purpose": "tool_invoke",
+      "auth_required": false,
+      "tags": ["tools"],
+      "operation_id": "sql_tool_sql_tool_post",
+      "summary": "Run a SQL query against the user database"
+    },
+    {
+      "path": "/file_read",
+      "method": "POST",
+      "purpose": "file_io",
+      "auth_required": false,
+      "tags": ["tools"],
+      "operation_id": "file_read_file_read_post",
+      "summary": "Read a file from the agent's workspace"
+    },
+    {
+      "path": "/flaky",
+      "method": "POST",
+      "purpose": "tool_invoke",
+      "auth_required": false,
+      "tags": ["test"],
+      "operation_id": "flaky_flaky_post",
+      "summary": "429 on early calls, then OK"
+    }
+  ],
+  "tools": [
+    {"name": "chat_chat_post", "description": "Conversational interface", "parameters": {"question": {"type": "string"}}, "inferred_capability": "tool_invoke"},
+    {"name": "sql_tool_sql_tool_post", "description": "Run a SQL query against the user database", "parameters": {"query": {"type": "string"}}, "inferred_capability": "sql_query"},
+    {"name": "file_read_file_read_post", "description": "Read a file from the agent's workspace", "parameters": {"path": {"type": "string"}}, "inferred_capability": "file_read"}
+  ],
+  "inferred_capabilities": ["file_read", "sql_query", "tool_invoke"],
+  "data_domains": [],
+  "risk_tier": "critical",
+  "risk_tier_source": "inferred",
+  "rate_limit": {
+    "requests_per_minute": 60,
+    "burst": 10,
+    "max_retries_on_429": 3
+  },
+  "notes": ""
+}

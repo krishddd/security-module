@@ -1,0 +1,181 @@
+name: OWASP ASI v3 Security Scan
+
+# v3: agent-agnostic. The workflow takes a base URL + OpenAPI spec URL + an
+# optional auth-token secret name; no hardcoded port 8080, no hardcoded
+# financial-agent config. Any agent that publishes OpenAPI can be scanned.
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_url:
+        description: "Base URL of the agent under test (e.g. https://agent.example.com)"
+        required: true
+      openapi_url:
+        description: "Direct URL to the agent's OpenAPI/Swagger spec. Leave blank to probe well-known paths."
+        required: false
+        default: ""
+      auth_token_secret:
+        description: "Name of the GitHub Actions secret holding the bearer token. Leave blank for no auth."
+        required: false
+        default: ""
+      categories:
+        description: "Comma-separated category filter (e.g. ASI01,ASI02). Blank = all 27."
+        required: false
+        default: ""
+      use_llm:
+        description: "Enable LLM planner / synthesizer / triager (requires ANTHROPIC_API_KEY secret)"
+        required: false
+        default: "false"
+      max_llm_spend_usd:
+        description: "Hard cap on LLM spend in USD"
+        required: false
+        default: "2.00"
+      allow_internal:
+        description: "Allow RFC1918 / loopback targets (set true only when scanning a self-hosted lab agent)"
+        required: false
+        default: "false"
+  schedule:
+    - cron: "0 2 * * 1"  # Weekly Monday 2am UTC (uses inputs from last manual dispatch)
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  security-scan:
+    name: OWASP ASI v3 Assessment
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r Security_module/requirements.txt
+
+      - name: Resolve auth-token secret name
+        id: auth
+        run: |
+          SECRET_NAME="${{ github.event.inputs.auth_token_secret }}"
+          if [ -n "$SECRET_NAME" ]; then
+            echo "env_flag=--auth-env $SECRET_NAME" >> $GITHUB_OUTPUT
+          else
+            echo "env_flag=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Discover agent profile
+        working-directory: Security_module
+        env:
+          # Make every secret in the repo available so --auth-env can resolve
+          # whichever one the user named. Only the value matching the chosen
+          # name is actually read.
+          AGENT_TOKEN: ${{ secrets[github.event.inputs.auth_token_secret] }}
+        run: |
+          ALLOW_INTERNAL=""
+          if [ "${{ github.event.inputs.allow_internal }}" = "true" ]; then
+            ALLOW_INTERNAL="--allow-internal"
+          fi
+          OPENAPI=""
+          if [ -n "${{ github.event.inputs.openapi_url }}" ]; then
+            OPENAPI="--openapi-url ${{ github.event.inputs.openapi_url }}"
+          fi
+          python cli.py discover \
+            --url "${{ github.event.inputs.agent_url }}" \
+            $OPENAPI \
+            ${{ steps.auth.outputs.env_flag }} \
+            $ALLOW_INTERNAL \
+            --out profile.json
+
+      - name: Build test plan
+        working-directory: Security_module
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          LLM=""
+          if [ "${{ github.event.inputs.use_llm }}" = "true" ]; then
+            LLM="--llm"
+          fi
+          python cli.py plan --profile profile.json $LLM --out plan.json
+
+      - name: Run v3 security scan
+        working-directory: Security_module
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AGENT_TOKEN: ${{ secrets[github.event.inputs.auth_token_secret] }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.categories }}" ]; then
+            for CAT in $(echo "${{ github.event.inputs.categories }}" | tr ',' ' '); do
+              ARGS="$ARGS --category $CAT"
+            done
+          fi
+          if [ "${{ github.event.inputs.use_llm }}" = "true" ]; then
+            ARGS="$ARGS --llm --max-llm-spend-usd ${{ github.event.inputs.max_llm_spend_usd }}"
+          fi
+          python cli.py scan-v3 --profile profile.json --plan plan.json $ARGS
+        continue-on-error: true  # collect reports even when critical findings exit non-zero
+
+      - name: Find results directory
+        id: results
+        working-directory: Security_module
+        run: |
+          RESULTS_DIR=$(ls -td results/*/ 2>/dev/null | head -1 || true)
+          if [ -n "$RESULTS_DIR" ]; then
+            echo "dir=Security_module/$RESULTS_DIR" >> $GITHUB_OUTPUT
+          fi
+          echo "Results directory: $RESULTS_DIR"
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: steps.results.outputs.dir != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.results.outputs.dir }}/report.sarif
+          category: owasp-asi-v3
+
+      - name: Publish JUnit test results
+        if: steps.results.outputs.dir != '' && always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: ${{ steps.results.outputs.dir }}/report.junit.xml
+          check_name: "OWASP ASI v3 Security Tests"
+          comment_title: "Security Assessment Results"
+
+      - name: Upload full report artifacts
+        if: steps.results.outputs.dir != '' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-asi-v3-report-${{ github.run_number }}
+          path: ${{ steps.results.outputs.dir }}
+          retention-days: 90
+
+      - name: Comment PR with summary
+        if: github.event_name == 'pull_request' && steps.results.outputs.dir != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = '${{ steps.results.outputs.dir }}/report.json';
+            if (!fs.existsSync(reportPath)) return;
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const score = (report.overall_risk_score || 0).toFixed(1);
+            const summary = report.summary || '(no summary)';
+            const recs = (report.recommendations || []).map(r => `- ${r}`).join('\n');
+            const body = `## OWASP ASI v3 Security Assessment\n\n` +
+              `**Risk Score:** ${score}/10.0\n\n` +
+              `**Target:** \`${report.target_url || 'n/a'}\`\n\n` +
+              `${summary}\n\n` +
+              (recs ? `### Recommendations\n${recs}` : '');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
