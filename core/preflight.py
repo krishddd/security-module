@@ -115,10 +115,33 @@ def _key_looks_real(value: str | None) -> bool:
 
 
 def _pick_chat_endpoint(profile: AgentProfile) -> EndpointSpec | None:
+    """Pick the endpoint most likely to be the actual chat-input route.
+
+    Several endpoints get classified as CHAT purpose (admin listings, exports,
+    threads, etc.). Rank them so the action route wins:
+      1. POST whose path ends in '/chat' (singular, the action verb)
+      2. Any POST CHAT endpoint not under '/admin/'
+      3. First CHAT endpoint as-is
+      4. First POST endpoint of any purpose
+    """
     chats = profile.endpoints_for(EndpointPurpose.CHAT)
+    def _score(e: EndpointSpec) -> tuple[int, int]:
+        p = e.path.lower()
+        is_post = e.method == HttpMethod.POST
+        ends_chat = p.endswith("/chat") or p.endswith("/stream-chat")
+        is_admin = "/admin/" in p
+        is_thread = "/thread/" in p  # prefer the simpler non-thread route
+        template_count = p.count("{")
+        priority = (
+            (0 if (is_post and ends_chat and not is_admin) else 1),
+            (0 if not is_admin else 1),
+            (0 if not is_thread else 1),
+            template_count,
+        )
+        # Return a single tuple usable as sort key
+        return priority  # type: ignore[return-value]
     if chats:
-        return chats[0]
-    # Heuristic fallback: first POST endpoint
+        return sorted(chats, key=_score)[0]
     for e in profile.endpoints:
         if e.method == HttpMethod.POST:
             return e
@@ -136,15 +159,31 @@ def _pick_health_endpoint(profile: AgentProfile) -> EndpointSpec | None:
 
 
 def _build_chat_payload(endpoint: EndpointSpec, prompt: str) -> dict[str, Any]:
-    """Try the most common chat payload shapes. Adapter wraps via JSON."""
+    """Build the request body for a chat-style endpoint.
+
+    Special-cases AnythingLLM (`/workspace/{slug}/chat` needs `mode: "chat"`),
+    OpenAI-compat (`/chat/completions` wants a `messages` array), and
+    Ollama-style (`/generate` wants a `model`). Otherwise falls back to the
+    most common field name found in the OpenAPI schema.
+    """
     schema = endpoint.request_schema or {}
     props = (schema.get("properties") or {}) if isinstance(schema, dict) else {}
+    path = (endpoint.path or "").lower()
+
+    if "/workspace/" in path and path.endswith(("/chat", "/stream-chat")):
+        return {"message": prompt, "mode": "chat"}
+
+    if "/chat/completions" in path or "messages" in props:
+        return {"messages": [{"role": "user", "content": prompt}]}
+
+    if "ollama" in path or path.endswith("/generate"):
+        return {"model": "default", "prompt": prompt, "stream": False}
+
     for key in ("message", "messages", "prompt", "input", "query", "text", "content"):
         if key in props or not props:
             if key == "messages":
                 return {"messages": [{"role": "user", "content": prompt}]}
             return {key: prompt}
-    # Final fallback
     return {"message": prompt}
 
 

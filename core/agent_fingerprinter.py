@@ -311,9 +311,23 @@ class AgentFingerprinter:
     # -- probe execution ----------------------------------------------------
 
     def _pick_chat_endpoint(self) -> EndpointSpec | None:
+        """Same ranking as core.preflight._pick_chat_endpoint — prefer the
+        actual chat-input route over admin listings or thread-specific routes."""
         chats = self.profile.endpoints_for(EndpointPurpose.CHAT)
+        def _score(e: EndpointSpec) -> tuple[int, ...]:
+            p = e.path.lower()
+            is_post = e.method == HttpMethod.POST
+            ends_chat = p.endswith("/chat") or p.endswith("/stream-chat")
+            is_admin = "/admin/" in p
+            is_thread = "/thread/" in p
+            return (
+                (0 if (is_post and ends_chat and not is_admin) else 1),
+                (0 if not is_admin else 1),
+                (0 if not is_thread else 1),
+                p.count("{"),
+            )
         if chats:
-            return chats[0]
+            return sorted(chats, key=_score)[0]
         for e in self.profile.endpoints:
             if e.method == HttpMethod.POST:
                 return e
@@ -396,10 +410,20 @@ class AgentFingerprinter:
             extracted = self._llm_extract_model_name(text)
             if extracted:
                 return extracted, "llm"
-        return (text.strip().split("\n")[0][:60] if text else ""), "regex"
+        # Bail when the response is HTML / SPA fallback — surfaces the real
+        # cause ("agent didn't answer in text") instead of pretending we
+        # extracted a model name from "<!DOCTYPE html>".
+        if _looks_like_html(text):
+            return "no_chat_response (html body)", "regex"
+        first_line = (text.strip().split("\n", 1)[0] if text else "").strip()
+        if not first_line or len(first_line) > 60:
+            return "unknown", "regex"
+        return first_line[:60], "regex"
 
     def _classify_tool_list(self, text: str, data: dict[str, Any]) -> tuple[str, str]:
         # The verdict is the raw text — _parse_tool_names handles JSON / lines.
+        if _looks_like_html(text):
+            return "no_chat_response (html body)", "regex"
         return (text or "").strip()[:400], "regex"
 
     def _classify_sys_prompt_leak(self, text: str, data: dict[str, Any]) -> tuple[str, str]:
@@ -471,6 +495,20 @@ class AgentFingerprinter:
 # ---------------------------------------------------------------------------
 
 
+def _looks_like_html(text: str) -> bool:
+    """True if the response body is an HTML document (SPA fallback / error page)."""
+    if not text:
+        return False
+    head = text.lstrip()[:512].lower()
+    if head.startswith("<!doctype") or head.startswith("<html"):
+        return True
+    # Tag-density heuristic: lots of angle brackets, very few JSON markers.
+    angle = head.count("<")
+    if angle >= 3 and ('"' not in head[:120] or "{" not in head[:120]):
+        return True
+    return False
+
+
 _GUARDRAIL_ORDER = {"weak": 0, "moderate": 1, "strict": 2}
 _INV_ORDER = {v: k for k, v in _GUARDRAIL_ORDER.items()}
 
@@ -492,6 +530,22 @@ def _combine_guardrail_strength(sys_verdict: str, refusal_verdict: str) -> str |
 def _build_chat_payload(endpoint: EndpointSpec, prompt: str) -> dict[str, Any]:
     schema = endpoint.request_schema or {}
     props = (schema.get("properties") or {}) if isinstance(schema, dict) else {}
+    path = (endpoint.path or "").lower()
+
+    # AnythingLLM-style: requires {"message": ..., "mode": "chat"} or it falls
+    # through to the SPA index page (200 OK + HTML body).
+    if "/workspace/" in path and path.endswith(("/chat", "/stream-chat")):
+        return {"message": prompt, "mode": "chat"}
+
+    # OpenAI-compat: /chat/completions and similar
+    if "/chat/completions" in path or "messages" in props:
+        return {"messages": [{"role": "user", "content": prompt}]}
+
+    # Ollama-style: requires "model" and either "prompt" or "messages"
+    if "ollama" in path or "generate" in path:
+        return {"model": "default", "prompt": prompt, "stream": False}
+
+    # Generic schema-driven fallback
     for key in ("message", "messages", "prompt", "input", "query", "text"):
         if key in props or not props:
             if key == "messages":
@@ -547,15 +601,32 @@ def _parse_tool_names(text: str) -> list[str]:
 
 
 def _harvest_tool_names(data: Any) -> list[str]:
-    """Pull tool/model names from a JSON envelope (best-effort)."""
+    """Pull tool/model names from a JSON envelope (best-effort).
+
+    Only accepts non-empty strings whose value looks like an identifier
+    (≥2 chars, contains at least one letter). Skips numeric IDs and the
+    target's own URL/path strings.
+    """
     names: list[str] = []
+
+    def _looks_like_name(v: str) -> bool:
+        s = v.strip()
+        if not s or len(s) < 2 or len(s) >= 80:
+            return False
+        if not any(c.isalpha() for c in s):  # pure-numeric IDs
+            return False
+        if "/" in s or s.startswith("http"):  # URLs / paths
+            return False
+        return True
 
     def _walk(obj: Any) -> None:
         if isinstance(obj, dict):
-            for key in ("name", "id", "tool", "model"):
+            # Prefer 'name', then 'id' / 'tool' / 'model' as fallback identifiers.
+            for key in ("name", "tool", "model", "id"):
                 v = obj.get(key)
-                if isinstance(v, str) and v and len(v) < 80:
-                    names.append(v)
+                if isinstance(v, str) and _looks_like_name(v):
+                    names.append(v.strip())
+                    break  # one identifier per object
             for v in obj.values():
                 _walk(v)
         elif isinstance(obj, list):

@@ -2,9 +2,14 @@
 
 import logging
 from pathlib import Path
-from jinja2 import Template
+from jinja2 import Environment, select_autoescape
 from models.enums import Severity, TestStatus
 from models.test_result import SecurityReport
+
+# Autoescape ON: probe responses can contain raw HTML (SPA fallback bodies,
+# error pages from the target). Without autoescape, those tags are parsed
+# by the browser and the cell renders as a blank.
+_JINJA_ENV = Environment(autoescape=select_autoescape(default=True))
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +85,30 @@ pre { background: #0d1117; padding: 0.8rem; border-radius: 4px; overflow-x: auto
   model aliases, obfuscated names, or non-English signals. Pass <code>--llm</code> for higher fidelity.
 </div>
 {% endif %}
+{% if any_chat_failed %}
+<div class="card" style="border-color: var(--medium); background: #2d2410; margin-top:0.5rem">
+  <strong>Note:</strong> The chat endpoint returned an HTML page instead of a text reply
+  for one or more probes — most likely the agent's chat handler requires additional
+  request fields (e.g. <code>mode</code>) or a configured LLM provider that wasn't set up.
+  Detected-model and tool-list signals below are therefore unreliable.
+</div>
+{% endif %}
 <div class="grid">
   <div class="card">
     <h3>Detected Model</h3>
-    <p><code>{{ detected_model_family or "unknown" }}</code></p>
+    {% if detected_model_family_clean %}
+      <p><code>{{ detected_model_family_clean }}</code></p>
+    {% else %}
+      <p style="color: var(--muted)"><em>Not detected — agent did not return a text reply</em></p>
+    {% endif %}
   </div>
   <div class="card">
     <h3>Response Shape</h3>
-    <p><code>{{ response_shape or "unknown" }}</code></p>
+    {% if response_shape and response_shape != "unknown" %}
+      <p><code>{{ response_shape }}</code></p>
+    {% else %}
+      <p style="color: var(--muted)"><em>Unknown — envelope did not match a known LLM API shape</em></p>
+    {% endif %}
   </div>
   <div class="card">
     <h3>Guardrail Strength</h3>
@@ -95,7 +116,11 @@ pre { background: #0d1117; padding: 0.8rem; border-radius: 4px; overflow-x: auto
   </div>
   <div class="card">
     <h3>Tools Discovered</h3>
-    <p>{{ detected_tools|length }} tool(s){% if detected_tools %}: {{ detected_tools[:8]|map(attribute='name')|join(', ') }}{% if detected_tools|length > 8 %}, …{% endif %}{% endif %}</p>
+    {% if detected_tools_clean %}
+      <p>{{ detected_tools_clean|length }} tool(s): {{ detected_tools_clean[:8]|join(', ') }}{% if detected_tools_clean|length > 8 %}, …{% endif %}</p>
+    {% else %}
+      <p style="color: var(--muted)"><em>None discovered</em></p>
+    {% endif %}
   </div>
 </div>
 <div class="card" style="margin-top:1rem">
@@ -105,14 +130,30 @@ pre { background: #0d1117; padding: 0.8rem; border-radius: 4px; overflow-x: auto
     Fingerprint cost: ${{ "%.4f"|format(fingerprint_evidence.cost_usd) }} of ${{ "%.4f"|format(fingerprint_evidence.cost_cap_usd) }} cap.
   </p>
   <table>
-    <tr><th>Probe</th><th>Tier</th><th>Classifier</th><th>Verdict</th><th>Response excerpt</th></tr>
+    <tr><th>Probe</th><th>Tier</th><th>Classifier</th><th>Verdict</th><th>Notes</th></tr>
     {% for p in fingerprint_evidence.probes %}
     <tr>
       <td>{{ p.probe_id }}</td>
       <td><span class="badge badge-{{ 'high' if p.tier == 'aggressive' else 'info' }}">{{ p.tier }}</span></td>
       <td>{{ p.classification_path }}</td>
-      <td><code>{{ p.verdict[:60] }}</code></td>
-      <td>{{ p.response_excerpt[:200] }}{% if p.response_excerpt|length > 200 %}…{% endif %}</td>
+      <td>
+        {% if p.verdict.startswith('no_chat_response') %}
+          <span class="badge badge-medium">no chat reply</span>
+        {% elif p.verdict == 'unknown' %}
+          <span class="badge badge-info">unknown</span>
+        {% else %}
+          <code>{{ p.verdict[:60] }}</code>
+        {% endif %}
+      </td>
+      <td style="color: var(--muted); font-size: 0.85rem">
+        {% if p.verdict.startswith('no_chat_response') %}
+          Target returned an HTML page; chat handler likely needs additional payload fields.
+        {% elif p.response_excerpt and not p.response_excerpt.lstrip().startswith('<') %}
+          {{ p.response_excerpt[:160] }}{% if p.response_excerpt|length > 160 %}…{% endif %}
+        {% else %}
+          <em>(response was HTML — excerpt suppressed)</em>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table>
@@ -189,21 +230,45 @@ def save_html_report(report: SecurityReport, output_path: Path, profile=None) ->
 
     fingerprint_evidence = getattr(profile, "fingerprint_evidence", None)
     fingerprint_regex_only = False
+    any_chat_failed = False
+    detected_model_family_clean: str | None = None
+    detected_tools_clean: list[str] = []
     if fingerprint_evidence is not None and fingerprint_evidence.probes:
         fingerprint_regex_only = all(
             p.classification_path == "regex" for p in fingerprint_evidence.probes
         )
+        any_chat_failed = any(
+            (p.verdict or "").startswith("no_chat_response")
+            for p in fingerprint_evidence.probes
+        )
 
-    template = Template(HTML_TEMPLATE)
+        # Clean detected-model display: drop the sentinel string if present
+        raw_model = getattr(profile, "detected_model_family", None)
+        if raw_model and not raw_model.startswith("no_chat_response"):
+            detected_model_family_clean = raw_model
+
+        # Clean tool list: drop empties and sentinels
+        raw_tools = getattr(profile, "detected_tools", []) or []
+        for t in raw_tools:
+            name = (getattr(t, "name", "") or "").strip()
+            if not name or name.startswith("no_chat_response"):
+                continue
+            if name not in detected_tools_clean:
+                detected_tools_clean.append(name)
+
+    template = _JINJA_ENV.from_string(HTML_TEMPLATE)
     html = template.render(
         report=report,
         score_class=score_class,
         fingerprint_evidence=fingerprint_evidence,
         fingerprint_regex_only=fingerprint_regex_only,
+        any_chat_failed=any_chat_failed,
         detected_model_family=getattr(profile, "detected_model_family", None),
+        detected_model_family_clean=detected_model_family_clean,
         response_shape=getattr(profile, "response_shape", None),
         guardrail_strength=getattr(profile, "guardrail_strength", None),
         detected_tools=getattr(profile, "detected_tools", []) or [],
+        detected_tools_clean=detected_tools_clean,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

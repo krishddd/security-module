@@ -200,7 +200,7 @@
       "summary": "DELETE /v1/admin/invite/{id}"
     },
     {
-      "path": "/v1/admin/workspaces/{workspaceId}/users",
+      "path": "/v1/admin/workspaces/my-workspace/users",
       "method": "GET",
       "purpose": "unknown",
       "request_schema": null,
@@ -224,10 +224,10 @@
         "Admin"
       ],
       "operation_id": null,
-      "summary": "GET /v1/admin/workspaces/{workspaceId}/users"
+      "summary": "GET /v1/admin/workspaces/my-workspace/users"
     },
     {
-      "path": "/v1/admin/workspaces/{workspaceId}/update-users",
+      "path": "/v1/admin/workspaces/my-workspace/update-users",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -243,10 +243,10 @@
         "Admin"
       ],
       "operation_id": null,
-      "summary": "POST /v1/admin/workspaces/{workspaceId}/update-users"
+      "summary": "POST /v1/admin/workspaces/my-workspace/update-users"
     },
     {
-      "path": "/v1/admin/workspaces/{workspaceSlug}/manage-users",
+      "path": "/v1/admin/workspaces/my-workspace/manage-users",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -274,7 +274,7 @@
         "Admin"
       ],
       "operation_id": null,
-      "summary": "POST /v1/admin/workspaces/{workspaceSlug}/manage-users"
+      "summary": "POST /v1/admin/workspaces/my-workspace/manage-users"
     },
     {
       "path": "/v1/admin/workspace-chats",
@@ -843,7 +843,7 @@
       "summary": "GET /v1/workspaces"
     },
     {
-      "path": "/v1/workspace/{slug}",
+      "path": "/v1/workspace/my-workspace",
       "method": "GET",
       "purpose": "unknown",
       "request_schema": null,
@@ -871,10 +871,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "GET /v1/workspace/{slug}"
+      "summary": "GET /v1/workspace/my-workspace"
     },
     {
-      "path": "/v1/workspace/{slug}",
+      "path": "/v1/workspace/my-workspace",
       "method": "DELETE",
       "purpose": "unknown",
       "request_schema": null,
@@ -884,10 +884,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "DELETE /v1/workspace/{slug}"
+      "summary": "DELETE /v1/workspace/my-workspace"
     },
     {
-      "path": "/v1/workspace/{slug}/update",
+      "path": "/v1/workspace/my-workspace/update",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -913,10 +913,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/update"
+      "summary": "POST /v1/workspace/my-workspace/update"
     },
     {
-      "path": "/v1/workspace/{slug}/chats",
+      "path": "/v1/workspace/my-workspace/chats",
       "method": "GET",
       "purpose": "chat",
       "request_schema": null,
@@ -946,10 +946,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "GET /v1/workspace/{slug}/chats"
+      "summary": "GET /v1/workspace/my-workspace/chats"
     },
     {
-      "path": "/v1/workspace/{slug}/update-embeddings",
+      "path": "/v1/workspace/my-workspace/update-embeddings",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -975,10 +975,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/update-embeddings"
+      "summary": "POST /v1/workspace/my-workspace/update-embeddings"
     },
     {
-      "path": "/v1/workspace/{slug}/update-pin",
+      "path": "/v1/workspace/my-workspace/update-pin",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -993,10 +993,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/update-pin"
+      "summary": "POST /v1/workspace/my-workspace/update-pin"
     },
     {
-      "path": "/v1/workspace/{slug}/chat",
+      "path": "/v1/workspace/my-workspace/chat",
       "method": "POST",
       "purpose": "chat",
       "request_schema": null,
@@ -1021,10 +1021,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/chat"
+      "summary": "POST /v1/workspace/my-workspace/chat"
     },
     {
-      "path": "/v1/workspace/{slug}/stream-chat",
+      "path": "/v1/workspace/my-workspace/stream-chat",
       "method": "POST",
       "purpose": "chat",
       "request_schema": null,
@@ -1070,10 +1070,10 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/stream-chat"
+      "summary": "POST /v1/workspace/my-workspace/stream-chat"
     },
     {
-      "path": "/v1/workspace/{slug}/vector-search",
+      "path": "/v1/workspace/my-workspace/vector-search",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -1106,7 +1106,7 @@
         "Workspaces"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/vector-search"
+      "summary": "POST /v1/workspace/my-workspace/vector-search"
     },
     {
       "path": "/v1/system/env-dump",
@@ -1242,7 +1242,7 @@
       "summary": "DELETE /v1/system/remove-documents"
     },
     {
-      "path": "/v1/workspace/{slug}/thread/new",
+      "path": "/v1/workspace/my-workspace/thread/new",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -1264,10 +1264,10 @@
         "Workspace Threads"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/thread/new"
+      "summary": "POST /v1/workspace/my-workspace/thread/new"
     },
     {
-      "path": "/v1/workspace/{slug}/thread/{threadSlug}/update",
+      "path": "/v1/workspace/my-workspace/thread/default-thread/update",
       "method": "POST",
       "purpose": "unknown",
       "request_schema": null,
@@ -1289,10 +1289,10 @@
         "Workspace Threads"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/thread/{threadSlug}/update"
+      "summary": "POST /v1/workspace/my-workspace/thread/default-thread/update"
     },
     {
-      "path": "/v1/workspace/{slug}/thread/{threadSlug}",
+      "path": "/v1/workspace/my-workspace/thread/default-thread",
       "method": "DELETE",
       "purpose": "unknown",
       "request_schema": null,
@@ -1302,10 +1302,10 @@
         "Workspace Threads"
       ],
       "operation_id": null,
-      "summary": "DELETE /v1/workspace/{slug}/thread/{threadSlug}"
+      "summary": "DELETE /v1/workspace/my-workspace/thread/default-thread"
     },
     {
-      "path": "/v1/workspace/{slug}/thread/{threadSlug}/chats",
+      "path": "/v1/workspace/my-workspace/thread/default-thread/chats",
       "method": "GET",
       "purpose": "chat",
       "request_schema": null,
@@ -1335,10 +1335,10 @@
         "Workspace Threads"
       ],
       "operation_id": null,
-      "summary": "GET /v1/workspace/{slug}/thread/{threadSlug}/chats"
+      "summary": "GET /v1/workspace/my-workspace/thread/default-thread/chats"
     },
     {
-      "path": "/v1/workspace/{slug}/thread/{threadSlug}/chat",
+      "path": "/v1/workspace/my-workspace/thread/default-thread/chat",
       "method": "POST",
       "purpose": "chat",
       "request_schema": null,
@@ -1363,10 +1363,10 @@
         "Workspace Threads"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/thread/{threadSlug}/chat"
+      "summary": "POST /v1/workspace/my-workspace/thread/default-thread/chat"
     },
     {
-      "path": "/v1/workspace/{slug}/thread/{threadSlug}/stream-chat",
+      "path": "/v1/workspace/my-workspace/thread/default-thread/stream-chat",
       "method": "POST",
       "purpose": "chat",
       "request_schema": null,
@@ -1412,7 +1412,7 @@
         "Workspace Threads"
       ],
       "operation_id": null,
-      "summary": "POST /v1/workspace/{slug}/thread/{threadSlug}/stream-chat"
+      "summary": "POST /v1/workspace/my-workspace/thread/default-thread/stream-chat"
     },
     {
       "path": "/v1/users",
@@ -1813,7 +1813,7 @@
       "name": "POST__v1_document_upload-link",
       "description": "POST /v1/document/upload-link",
       "parameters": {},
-      "inferred_capability": "web_browse"
+      "inferred_capability": "file_write"
     },
     {
       "name": "GET__v1_document_accepted-file-types",
@@ -1835,19 +1835,19 @@
     },
     {
       "name": "GET__v1_workspace__slug__chats",
-      "description": "GET /v1/workspace/{slug}/chats",
+      "description": "GET /v1/workspace/my-workspace/chats",
       "parameters": {},
       "inferred_capability": "unknown"
     },
     {
       "name": "POST__v1_workspace__slug__chat",
-      "description": "POST /v1/workspace/{slug}/chat",
+      "description": "POST /v1/workspace/my-workspace/chat",
       "parameters": {},
       "inferred_capability": "code_execution"
     },
     {
       "name": "POST__v1_workspace__slug__stream-chat",
-      "description": "POST /v1/workspace/{slug}/stream-chat",
+      "description": "POST /v1/workspace/my-workspace/stream-chat",
       "parameters": {},
       "inferred_capability": "code_execution"
     },
@@ -1859,19 +1859,19 @@
     },
     {
       "name": "GET__v1_workspace__slug__thread__threadSlug__chats",
-      "description": "GET /v1/workspace/{slug}/thread/{threadSlug}/chats",
+      "description": "GET /v1/workspace/my-workspace/thread/default-thread/chats",
       "parameters": {},
       "inferred_capability": "unknown"
     },
     {
       "name": "POST__v1_workspace__slug__thread__threadSlug__chat",
-      "description": "POST /v1/workspace/{slug}/thread/{threadSlug}/chat",
+      "description": "POST /v1/workspace/my-workspace/thread/default-thread/chat",
       "parameters": {},
       "inferred_capability": "unknown"
     },
     {
       "name": "POST__v1_workspace__slug__thread__threadSlug__stream-chat",
-      "description": "POST /v1/workspace/{slug}/thread/{threadSlug}/stream-chat",
+      "description": "POST /v1/workspace/my-workspace/thread/default-thread/stream-chat",
       "parameters": {},
       "inferred_capability": "unknown"
     },

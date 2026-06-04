@@ -130,11 +130,15 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Discover failed." -ForegroundColor Red
     exit 1
 }
-# Patch the base_url in the generated profile -- the spec's `servers` is /api
-# (relative) which our parser sets to http://127.0.0.1/api otherwise. Re-pin
-# to the live host:port. Write WITHOUT BOM (pydantic rejects UTF-8 BOM).
+# Patch the base_url in the generated profile.
+# AnythingLLM mounts its REST API under `/api` — every endpoint path in the
+# OpenAPI spec is relative to that prefix (e.g. `/v1/auth`, `/v1/workspace/...`).
+# We must KEEP the `/api` segment in the base_url, otherwise every request
+# hits the SPA fallback handler (which returns the HTML index with 200 OK
+# for any unknown path) and the entire scan is bogus.
+# Write WITHOUT BOM (pydantic rejects UTF-8 BOM).
 $profileText = Get-Content $ProfilePath -Raw
-$profileText = $profileText -replace '"base_url":\s*"[^"]+"', "`"base_url`": `"http://127.0.0.1:$Port`""
+$profileText = $profileText -replace '"base_url":\s*"[^"]+"', "`"base_url`": `"http://127.0.0.1:$Port/api`""
 
 # Resolve a real workspace slug. AnythingLLM's chat endpoints are templated
 # (`/v1/workspace/{slug}/chat`); without substitution, requests hit the SPA
@@ -157,13 +161,19 @@ try {
         Write-Host "      Created workspace: $slug" -ForegroundColor DarkGray
     }
     if ($slug) {
-        # Substitute templated path params with the resolved values.
-        $profileText = $profileText -replace '\{slug\}',         $slug
-        $profileText = $profileText -replace '%7Bslug%7D',       $slug
-        $profileText = $profileText -replace '\{workspaceId\}',  $slug
-        $profileText = $profileText -replace '%7BworkspaceId%7D',$slug
-        $profileText = $profileText -replace '\{threadSlug\}',   'default-thread'
-        $profileText = $profileText -replace '%7BthreadSlug%7D', 'default-thread'
+        # Substitute every templated path param the OpenAPI parser captured.
+        # All workspace-identifier variants resolve to the same slug; thread
+        # gets a sentinel that the chat tester can still POST against.
+        $slugTokens = @('slug', 'workspaceId', 'workspaceSlug', 'workspace_slug', 'workspace')
+        foreach ($t in $slugTokens) {
+            $profileText = $profileText -replace ('\{' + [Regex]::Escape($t) + '\}'), $slug
+            $profileText = $profileText -replace ('%7B' + [Regex]::Escape($t) + '%7D'), $slug
+        }
+        $threadTokens = @('threadSlug', 'thread_slug', 'threadId')
+        foreach ($t in $threadTokens) {
+            $profileText = $profileText -replace ('\{' + [Regex]::Escape($t) + '\}'), 'default-thread'
+            $profileText = $profileText -replace ('%7B' + [Regex]::Escape($t) + '%7D'), 'default-thread'
+        }
     }
 } catch {
     Write-Host "      WARN: could not resolve workspace slug ($($_.Exception.Message))" -ForegroundColor Yellow
