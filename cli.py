@@ -23,11 +23,19 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 # Load .env (ANTHROPIC_API_KEY, OPENAI_API_KEY, auth tokens, model overrides).
-# Silent if python-dotenv isn't installed or no .env file exists — both
-# legitimate states (the framework runs fine without an LLM).
+# Checks multiple candidate locations because users put .env in different
+# places: repo root (Security_module/), current working dir, parent dir.
+# Silent if python-dotenv isn't installed.
 try:
     from dotenv import load_dotenv  # type: ignore[import-not-found]
-    load_dotenv(_HERE / ".env", override=False)
+    _ENV_CANDIDATES = [
+        _HERE / ".env",
+        Path.cwd() / ".env",
+        _HERE.parent / ".env",
+    ]
+    for _candidate in _ENV_CANDIDATES:
+        if _candidate.exists() and _candidate.is_file():
+            load_dotenv(_candidate, override=False)
 except ImportError:
     pass
 
@@ -511,6 +519,74 @@ def plan_cmd(profile: str, llm: bool, max_payloads: int, out: str) -> None:
             console.print(f"  [dim]- {c.category.value}: {c.skip_reason}[/dim]")
 
 
+@cli.command("preflight")
+@click.option("--profile", "-p", required=True, type=click.Path(exists=True, dir_okay=False), help="AgentProfile JSON")
+@click.option("--allow-internal", is_flag=True, help="Allow RFC1918 / loopback / metadata targets (lab use only)")
+@click.option("--preflight-latency", is_flag=True, help="Include baseline_latency check (~2 chat round trips)")
+@click.option("--preflight-warn-only", is_flag=True, help="Downgrade FAILs to WARNs; exit 0 on WARN")
+@click.option("--yes", is_flag=True, help="Bypass all interactive prompts (CI/automation)")
+def preflight_cmd(
+    profile: str,
+    allow_internal: bool,
+    preflight_latency: bool,
+    preflight_warn_only: bool,
+    yes: bool,
+) -> None:
+    """Run preflight verification against an AgentProfile.
+
+    Exits 0 on GREEN, 1 on WARN (or declined consent), 2 on HARD-STOP.
+    """
+    from core.preflight import (
+        Preflight,
+        PreflightOptions,
+        render_console,
+        confirm_proceed_on_warn,
+    )
+    from core.ssrf_guard import assert_url_safe, SSRFBlockedError
+    from core.target_adapter import make_adapter
+    from models.agent_profile import AgentProfile
+
+    p = AgentProfile.model_validate_json(Path(profile).read_text(encoding="utf-8-sig"))
+
+    try:
+        assert_url_safe(str(p.base_url), allow_internal=allow_internal)
+    except SSRFBlockedError as e:
+        console.print(f"[red]SSRF guard blocked target:[/red] {e}")
+        sys.exit(2)
+
+    async def _run() -> int:
+        adapter = make_adapter(p)
+        try:
+            pf = Preflight(
+                p,
+                adapter,
+                PreflightOptions(
+                    include_latency=preflight_latency,
+                    warn_only=preflight_warn_only,
+                    yes=yes,
+                ),
+            )
+            result = await pf.run()
+            render_console(result, console)
+            if result.overall == "hard_stop":
+                return 2
+            if result.overall == "warn":
+                if preflight_warn_only:
+                    return 0
+                if confirm_proceed_on_warn(result, yes=yes):
+                    return 0
+                return 1
+            return 0
+        finally:
+            try:
+                await adapter.close()
+            except Exception:
+                pass
+
+    rc = asyncio.run(_run())
+    sys.exit(rc)
+
+
 @cli.command("scan-v3")
 @click.option("--profile", "-p", required=True, type=click.Path(exists=True, dir_okay=False), help="AgentProfile JSON")
 @click.option("--plan", "plan_path", type=click.Path(exists=True, dir_okay=False), default=None, help="TestPlan JSON (built on the fly if omitted)")
@@ -520,6 +596,14 @@ def plan_cmd(profile: str, llm: bool, max_payloads: int, out: str) -> None:
 @click.option("--max-llm-calls", type=int, default=None)
 @click.option("--max-llm-spend-usd", type=float, default=None)
 @click.option("--rate-limit-rpm", type=int, default=None)
+@click.option("--allow-internal", is_flag=True, help="Allow RFC1918 / loopback targets (lab use only)")
+@click.option("--skip-preflight", is_flag=True, help="Bypass preflight verification entirely")
+@click.option("--preflight-warn-only", is_flag=True, help="Downgrade preflight FAILs to WARNs; exit 0 on WARN")
+@click.option("--preflight-latency", is_flag=True, help="Include baseline_latency check (~2 chat round trips)")
+@click.option("--fingerprint", is_flag=True, help="Run passive agent fingerprinting after preflight")
+@click.option("--fingerprint-aggressive", is_flag=True, help="Add aggressive probes (system-prompt extraction, etc) — requires consent")
+@click.option("--fingerprint-budget", type=float, default=0.05, show_default=True, help="USD cap for fingerprint LLM cost")
+@click.option("--yes", is_flag=True, help="Bypass all interactive prompts (CI/automation)")
 def scan_v3_cmd(
     profile: str,
     plan_path: str | None,
@@ -529,6 +613,14 @@ def scan_v3_cmd(
     max_llm_calls: int | None,
     max_llm_spend_usd: float | None,
     rate_limit_rpm: int | None,
+    allow_internal: bool,
+    skip_preflight: bool,
+    preflight_warn_only: bool,
+    preflight_latency: bool,
+    fingerprint: bool,
+    fingerprint_aggressive: bool,
+    fingerprint_budget: float,
+    yes: bool,
 ) -> None:
     """v3 generic scan. Currently supports --dry-run; live execution lands in Phase 4."""
     from core.stub_planner import build_stub_plan
@@ -553,6 +645,14 @@ def scan_v3_cmd(
                 c.skip_reason = "SKIPPED_CATEGORY_FILTER"
 
     if not dry_run:
+        # SSRF gate — single owner for live scans. Preflight does NOT re-call.
+        from core.ssrf_guard import assert_url_safe, SSRFBlockedError
+        try:
+            assert_url_safe(str(p.base_url), allow_internal=allow_internal)
+        except SSRFBlockedError as e:
+            console.print(f"[red]SSRF guard blocked target:[/red] {e}")
+            sys.exit(2)
+
         # v3 live execution path (Phase 5).
         from core.target_adapter import make_adapter
         from core.test_runner import SecurityTestRunner
@@ -578,6 +678,69 @@ def scan_v3_cmd(
 
         async def _run() -> None:
             adapter = make_adapter(p)
+
+            # Preflight (Part 1) — ON by default.
+            if not skip_preflight:
+                from core.preflight import (
+                    Preflight,
+                    PreflightOptions,
+                    PreflightFailure,
+                    render_console,
+                    confirm_proceed_on_warn,
+                )
+                pf = Preflight(
+                    p,
+                    adapter,
+                    PreflightOptions(
+                        include_latency=preflight_latency,
+                        warn_only=preflight_warn_only,
+                        yes=yes,
+                    ),
+                )
+                pf_result = await pf.run()
+                render_console(pf_result, console)
+                if pf_result.overall == "hard_stop":
+                    await adapter.close()
+                    sys.exit(2)
+                if pf_result.overall == "warn" and not preflight_warn_only:
+                    if not confirm_proceed_on_warn(pf_result, yes=yes):
+                        console.print("[yellow]Preflight warnings not acknowledged; aborting.[/yellow]")
+                        await adapter.close()
+                        sys.exit(1)
+
+            # Fingerprint (Part 2) — opt-in.
+            if fingerprint or fingerprint_aggressive:
+                from core.agent_fingerprinter import (
+                    AgentFingerprinter,
+                    FingerprintOptions,
+                    confirm_aggressive_consent,
+                )
+                if fingerprint_aggressive:
+                    if not confirm_aggressive_consent(yes=yes):
+                        console.print("[yellow]Aggressive fingerprint consent declined; aborting.[/yellow]")
+                        await adapter.close()
+                        sys.exit(1)
+                fp_opts = FingerprintOptions(
+                    aggressive=fingerprint_aggressive,
+                    budget_usd=fingerprint_budget,
+                )
+                fp = AgentFingerprinter(p, adapter, fp_opts, llm_context=llm_context)
+                evidence = await fp.fingerprint()
+                # Merge into profile (live mutation; saved separately too)
+                p.fingerprint_evidence = evidence
+                p.detected_model_family = fp.detected_model_family
+                p.response_shape = fp.response_shape
+                p.guardrail_strength = fp.guardrail_strength
+                p.detected_tools = fp.detected_tools
+                p.confirmed_capabilities = fp.confirmed_capabilities
+                # Persist enriched profile
+                try:
+                    enriched_path = Path(profile).with_suffix(".enriched.json")
+                    enriched_path.write_text(p.model_dump_json(indent=2), encoding="utf-8")
+                    console.print(f"[dim]Enriched profile written to {enriched_path}[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]Could not save enriched profile: {e}[/yellow]")
+
             runner = SecurityTestRunner(config=None)
             report = await runner.run_with_profile(
                 profile=p,
@@ -604,7 +767,7 @@ def scan_v3_cmd(
                 from reporting.html_reporter import save_html_report
                 save_sarif_report(report, run_dir / "report.sarif")
                 save_junit_report(report, run_dir / "report.junit.xml")
-                save_html_report(report, run_dir / "report.html")
+                save_html_report(report, run_dir / "report.html", profile=p)
                 console.print(f"[dim]Reports written to {run_dir}[/dim]")
 
             critical = sum(

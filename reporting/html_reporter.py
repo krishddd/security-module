@@ -72,6 +72,53 @@ pre { background: #0d1117; padding: 0.8rem; border-radius: 4px; overflow-x: auto
   <p>{{ report.summary }}</p>
 </div>
 
+{% if fingerprint_evidence %}
+<h2>Agent Identity</h2>
+{% if fingerprint_regex_only %}
+<div class="card" style="border-color: var(--medium); background: #2d2410">
+  <strong>Heads up:</strong> Fingerprint generated without LLM. Results may miss
+  model aliases, obfuscated names, or non-English signals. Pass <code>--llm</code> for higher fidelity.
+</div>
+{% endif %}
+<div class="grid">
+  <div class="card">
+    <h3>Detected Model</h3>
+    <p><code>{{ detected_model_family or "unknown" }}</code></p>
+  </div>
+  <div class="card">
+    <h3>Response Shape</h3>
+    <p><code>{{ response_shape or "unknown" }}</code></p>
+  </div>
+  <div class="card">
+    <h3>Guardrail Strength</h3>
+    <p>{% if guardrail_strength %}<code>{{ guardrail_strength }}</code>{% else %}<em>Not assessed (passive fingerprint only)</em>{% endif %}</p>
+  </div>
+  <div class="card">
+    <h3>Tools Discovered</h3>
+    <p>{{ detected_tools|length }} tool(s){% if detected_tools %}: {{ detected_tools[:8]|map(attribute='name')|join(', ') }}{% if detected_tools|length > 8 %}, …{% endif %}{% endif %}</p>
+  </div>
+</div>
+<div class="card" style="margin-top:1rem">
+  <h3>Probes ({{ fingerprint_evidence.probes|length }})</h3>
+  <p style="color: var(--muted); font-size: 0.85rem">
+    Probe response excerpts shown after redaction. Review carefully before sharing externally.
+    Fingerprint cost: ${{ "%.4f"|format(fingerprint_evidence.cost_usd) }} of ${{ "%.4f"|format(fingerprint_evidence.cost_cap_usd) }} cap.
+  </p>
+  <table>
+    <tr><th>Probe</th><th>Tier</th><th>Classifier</th><th>Verdict</th><th>Response excerpt</th></tr>
+    {% for p in fingerprint_evidence.probes %}
+    <tr>
+      <td>{{ p.probe_id }}</td>
+      <td><span class="badge badge-{{ 'high' if p.tier == 'aggressive' else 'info' }}">{{ p.tier }}</span></td>
+      <td>{{ p.classification_path }}</td>
+      <td><code>{{ p.verdict[:60] }}</code></td>
+      <td>{{ p.response_excerpt[:200] }}{% if p.response_excerpt|length > 200 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
 <h2>Category Results</h2>
 <div class="grid">
 {% for cat in report.categories %}
@@ -122,8 +169,12 @@ pre { background: #0d1117; padding: 0.8rem; border-radius: 4px; overflow-x: auto
 </html>"""
 
 
-def save_html_report(report: SecurityReport, output_path: Path) -> Path:
-    """Generate HTML dashboard report."""
+def save_html_report(report: SecurityReport, output_path: Path, profile=None) -> Path:
+    """Generate HTML dashboard report.
+
+    If ``profile`` is provided and has ``fingerprint_evidence`` populated, an
+    "Agent Identity" panel is rendered. Otherwise the panel is omitted.
+    """
     score = report.overall_risk_score
     if score >= 7.0:
         score_class = "score-critical"
@@ -136,8 +187,24 @@ def save_html_report(report: SecurityReport, output_path: Path) -> Path:
     else:
         score_class = "score-none"
 
+    fingerprint_evidence = getattr(profile, "fingerprint_evidence", None)
+    fingerprint_regex_only = False
+    if fingerprint_evidence is not None and fingerprint_evidence.probes:
+        fingerprint_regex_only = all(
+            p.classification_path == "regex" for p in fingerprint_evidence.probes
+        )
+
     template = Template(HTML_TEMPLATE)
-    html = template.render(report=report, score_class=score_class)
+    html = template.render(
+        report=report,
+        score_class=score_class,
+        fingerprint_evidence=fingerprint_evidence,
+        fingerprint_regex_only=fingerprint_regex_only,
+        detected_model_family=getattr(profile, "detected_model_family", None),
+        response_shape=getattr(profile, "response_shape", None),
+        guardrail_strength=getattr(profile, "guardrail_strength", None),
+        detected_tools=getattr(profile, "detected_tools", []) or [],
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:

@@ -139,6 +139,30 @@ class RateLimitConfig(BaseModel):
     max_retries_on_429: int = 3
 
 
+EndpointShape = Literal["openai", "anthropic", "ollama", "custom", "unknown"]
+
+
+class ProbeRecord(BaseModel):
+    """One fingerprint probe and its outcome."""
+
+    probe_id: str
+    tier: Literal["passive", "aggressive"]
+    classification_path: Literal["llm", "regex"]
+    request_excerpt: str = ""
+    response_excerpt: str = ""
+    verdict: str = ""
+
+
+class FingerprintEvidence(BaseModel):
+    """Typed evidence object attached to an enriched AgentProfile."""
+
+    probes: list[ProbeRecord] = Field(default_factory=list)
+    enumerated_urls: list[str] = Field(default_factory=list)
+    structural_results: dict[str, EndpointShape] = Field(default_factory=dict)
+    cost_usd: float = 0.0
+    cost_cap_usd: float = 0.0
+
+
 class SessionHandle(BaseModel):
     """Per-tester multi-turn session state.
 
@@ -185,6 +209,14 @@ class AgentProfile(BaseModel):
     risk_tier_source: Literal["inferred", "user"] = "inferred"
     rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
     notes: str = ""
+
+    # ---- Fingerprint enrichment (v3, all backward-compatible) -----------
+    detected_model_family: str | None = None
+    response_shape: Literal["openai", "anthropic", "ollama", "custom"] | None = None
+    guardrail_strength: Literal["weak", "moderate", "strict"] | None = None
+    detected_tools: list[ToolDescriptor] = Field(default_factory=list)
+    confirmed_capabilities: list[AgentCapability] = Field(default_factory=list)
+    fingerprint_evidence: FingerprintEvidence | None = None
 
     # ---- Convenience -----------------------------------------------------
 

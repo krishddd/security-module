@@ -21,6 +21,7 @@ V3_SAMPLES = [
     "full_vuln_agent.json",
     "ollama_agent.json",
     "dify_agent.json",
+    "odysseus_agent.json",
 ]
 
 

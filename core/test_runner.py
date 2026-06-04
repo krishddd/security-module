@@ -283,7 +283,10 @@ class SecurityTestRunner:
         if adapter is None:
             adapter = make_adapter(profile)
 
-        profile_caps = set(profile.inferred_capabilities)
+        # UNION: confirmed_capabilities can only ADD coverage, never replace.
+        profile_caps = set(profile.inferred_capabilities) | set(
+            getattr(profile, "confirmed_capabilities", None) or []
+        )
         profile_transport = profile.transport
 
         report = SecurityReport(

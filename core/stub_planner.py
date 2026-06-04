@@ -37,7 +37,12 @@ _SEVERITY_PRIORITY = {
 
 
 def build_stub_plan(profile: AgentProfile, *, max_payloads: int = 20) -> TestPlan:
-    profile_caps = set(profile.inferred_capabilities)
+    # UNION semantics: confirmed_capabilities can only ADD coverage, never
+    # replace. Prevents a self-disclosure probe from silently reducing scan
+    # breadth when it reports fewer items than the OpenAPI heuristic inferred.
+    profile_caps = set(profile.inferred_capabilities) | set(
+        getattr(profile, "confirmed_capabilities", None) or []
+    )
     plans: list[CategoryPlan] = []
 
     for cat in RiskCategory:

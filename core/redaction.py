@@ -90,3 +90,78 @@ class Redactor:
 
 # Module-level singleton. Anything that wants to scrub imports this.
 GLOBAL_REDACTOR = Redactor()
+
+
+# ---------------------------------------------------------------------------
+# PROBE_REDACTOR — scrubs probe response excerpts before storage/render.
+# Targets: system-prompt-like blocks, PII patterns. Built on GLOBAL_REDACTOR
+# so registered auth tokens are also scrubbed.
+# ---------------------------------------------------------------------------
+
+
+_SYSTEM_PROMPT_OPENERS = re.compile(
+    r"(?im)^[\s>•\-\*]*"
+    r"(you are|your role|you will not|you will|you must|act as|do not|always|never)\b"
+    r"[^\n\r]{40,}$"
+)
+
+# Cheap allow-list of benign sentence openings that begin with "You are…"
+_BENIGN_OPENERS = (
+    "you are welcome",
+    "you are allowed",
+    "you are encouraged",
+    "you are about to",
+    "you are free to",
+)
+
+_DIRECTIVE_TOKENS = re.compile(
+    r"\b(must|should|do not|don't|never|always|respond|answer|refuse|output|format|comply|reply)\b",
+    re.IGNORECASE,
+)
+
+_EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
+_PHONE = re.compile(r"\b(?:\+?\d{1,3}[ -]?)?\(?\d{3}\)?[ -]?\d{3}[ -]?\d{4}\b")
+_SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+_CREDIT_CARD = re.compile(r"\b(?:\d[ -]?){13,16}\d\b")
+
+
+class ProbeRedactor:
+    """Redacts probe response content before it's saved or rendered.
+
+    Wraps GLOBAL_REDACTOR (auth tokens) and adds:
+      * system-prompt-like sentences (tightened heuristic)
+      * email / phone / SSN / credit-card patterns
+    """
+
+    SYSTEM_PROMPT_MASK = "[REDACTED_SYSTEM_PROMPT_LIKELY]"
+
+    def scrub_probe_response(self, text: str) -> str:
+        if not isinstance(text, str) or not text:
+            return text
+        out = GLOBAL_REDACTOR.scrub(text)
+        # System-prompt-like blocks
+        out = self._mask_system_prompts(out)
+        # PII patterns
+        out = _EMAIL.sub("[REDACTED_EMAIL]", out)
+        out = _SSN.sub("[REDACTED_SSN]", out)
+        out = _CREDIT_CARD.sub("[REDACTED_CC]", out)
+        out = _PHONE.sub("[REDACTED_PHONE]", out)
+        return out
+
+    def _mask_system_prompts(self, text: str) -> str:
+        def _maybe_mask(match: re.Match[str]) -> str:
+            sentence = match.group(0)
+            stripped = sentence.strip().lower()
+            if any(stripped.startswith(b) for b in _BENIGN_OPENERS):
+                return sentence
+            word_count = len(sentence.split())
+            if word_count < 15:
+                return sentence
+            if not _DIRECTIVE_TOKENS.search(sentence):
+                return sentence
+            return ProbeRedactor.SYSTEM_PROMPT_MASK
+
+        return _SYSTEM_PROMPT_OPENERS.sub(_maybe_mask, text)
+
+
+PROBE_REDACTOR = ProbeRedactor()

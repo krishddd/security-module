@@ -71,6 +71,8 @@ def test_scan_v3_live_against_stub(stub_agent_url: str, tmp_path: Path) -> None:
         "--profile", str(profile_path),
         "--plan", str(plan_path),
         "--category", "ASI01",
+        "--allow-internal",
+        "--skip-preflight",
     )
     # Exit 0 (no critical) or 1 (critical findings) are both acceptable; 2+
     # signals a real error (bad CLI invocation, runtime crash, etc.).
@@ -128,6 +130,8 @@ def test_scan_v3_live_capability_skip(stub_agent_url: str, tmp_path: Path) -> No
         "scan-v3",
         "--profile", str(profile_path),
         "--category", "ASI05",
+        "--allow-internal",
+        "--skip-preflight",
     )
     assert r.returncode in (0, 1), r.stderr + r.stdout
 

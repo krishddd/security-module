@@ -87,19 +87,32 @@ def _profile_to_user_turn(profile: AgentProfile, all_categories: list[RiskCatego
         for e in profile.endpoints
     ]
     tools = [{"name": t.name, "description": t.description[:200]} for t in profile.tools[:30]]
+    # UNION: confirmed_capabilities adds coverage, never replaces inferred.
+    confirmed = list(getattr(profile, "confirmed_capabilities", None) or [])
+    union_caps = sorted({*profile.inferred_capabilities, *confirmed}, key=lambda c: c.value)
     payload = {
         "agent_name": profile.name,
         "transport": profile.transport.value,
         "auth_scheme": profile.auth.scheme.value,
-        "capabilities": [c.value for c in profile.inferred_capabilities],
+        "capabilities": [c.value for c in union_caps],
+        "inferred_capabilities": [c.value for c in profile.inferred_capabilities],
+        "confirmed_capabilities": [c.value for c in confirmed],
         "data_domains": profile.data_domains,
         "risk_tier": profile.risk_tier,
         "endpoints": eps,
         "tools": tools,
         "categories_to_decide": [c.value for c in all_categories],
     }
+    # Fingerprint hints (only when populated; backward-compatible otherwise).
+    for key in ("detected_model_family", "response_shape", "guardrail_strength"):
+        v = getattr(profile, key, None)
+        if v:
+            payload[key] = v
     return (
         "Decide inclusion + priority for every listed category against this agent.\n\n"
+        "NOTE: `capabilities` is the UNION of inferred (OpenAPI heuristics) and\n"
+        "confirmed (live-probed). Prioritize confirmed signals, but never skip a\n"
+        "category solely because it's only in inferred.\n\n"
         f"AGENT PROFILE (JSON):\n```json\n{json.dumps(payload, indent=2)}\n```\n\n"
         "Call submit_plan with one entry per category in categories_to_decide."
     )

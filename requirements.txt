@@ -33,3 +33,4 @@ openai>=1.50.0
 
 # Loads .env at CLI startup (silent if absent)
 python-dotenv>=1.0.0
+markupsafe>=2.0

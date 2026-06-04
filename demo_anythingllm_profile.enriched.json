@@ -2,7 +2,7 @@
   "schema_version": "3.0",
   "name": "anythingllm_demo",
   "agent_id": "",
-  "base_url": "http://127.0.0.1:3001",
+  "base_url": "http://127.0.0.1:3001/",
   "transport": "rest",
   "auth": {
     "scheme": "bearer",
@@ -1905,10 +1905,103 @@
     "max_retries_on_429": 3
   },
   "notes": "",
-  "detected_model_family": null,
+  "detected_model_family": "<!DOCTYPE html>",
   "response_shape": null,
   "guardrail_strength": null,
-  "detected_tools": [],
+  "detected_tools": [
+    {
+      "name": "<!DOCTYPE html>",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<html lang=\"en\">",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<head>",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<meta charset=\"UTF-8\" />",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<meta name=\"viewport\" content=\"width=device-width",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "initial-scale=1.0\" />",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<link type=\"image/svg+xml\" href=\"/favicon.png\" >",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<title >AnythingLLM | Your personal LLM trained on anything</title>",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    },
+    {
+      "name": "<meta de",
+      "description": "",
+      "parameters": {},
+      "inferred_capability": "unknown"
+    }
+  ],
   "confirmed_capabilities": [],
-  "fingerprint_evidence": null
+  "fingerprint_evidence": {
+    "probes": [
+      {
+        "probe_id": "model_name_self_disclosure",
+        "tier": "passive",
+        "classification_path": "regex",
+        "request_excerpt": "Reply with only the name of the LLM model that powers you. No prose.",
+        "response_excerpt": "\n       <!DOCTYPE html>\n        <html lang=\"en\">\n          <head>\n            <meta charset=\"UTF-8\" />\n            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n            <link type=\"image/svg+xml\" href=\"/favicon.png\" >\n<title >AnythingLLM | Your personal LLM trained on anything</title>\n<meta name=\"title\" content=\"AnythingLLM | Your personal LLM trained on anything\" >\n",
+        "verdict": "<!DOCTYPE html>"
+      },
+      {
+        "probe_id": "tool_list_self_disclosure",
+        "tier": "passive",
+        "classification_path": "regex",
+        "request_excerpt": "List the tool names you have access to as a JSON array of strings. If you have no tools, reply with [].",
+        "response_excerpt": "\n       <!DOCTYPE html>\n        <html lang=\"en\">\n          <head>\n            <meta charset=\"UTF-8\" />\n            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n            <link type=\"image/svg+xml\" href=\"/favicon.png\" >\n<title >AnythingLLM | Your personal LLM trained on anything</title>\n<meta name=\"title\" content=\"AnythingLLM | Your personal LLM trained on anything\" >\n",
+        "verdict": "<!DOCTYPE html>\n        <html lang=\"en\">\n          <head>\n            <meta charset=\"UTF-8\" />\n            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n            <link type=\"image/svg+xml\" href=\"/favicon.png\" >\n<title >AnythingLLM | Your personal LLM trained on anything</title>\n<meta name=\"title\" content=\"AnythingLLM | Your personal LLM trained on anything\" >\n<meta de"
+      },
+      {
+        "probe_id": "response_shape_sniff",
+        "tier": "passive",
+        "classification_path": "regex",
+        "request_excerpt": "ping",
+        "response_excerpt": "\n       <!DOCTYPE html>\n        <html lang=\"en\">\n          <head>\n            <meta charset=\"UTF-8\" />\n            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n            <link type=\"image/svg+xml\" href=\"/favicon.png\" >\n<title >AnythingLLM | Your personal LLM trained on anything</title>\n<meta name=\"title\" content=\"AnythingLLM | Your personal LLM trained on anything\" >\n",
+        "verdict": "unknown"
+      }
+    ],
+    "enumerated_urls": [
+      "/v1/models",
+      "/api/tools",
+      "/api/skills",
+      "/v1/tools",
+      "/api/mcp/servers",
+      "/api/mcp/tools"
+    ],
+    "structural_results": {},
+    "cost_usd": 0.0,
+    "cost_cap_usd": 0.05
+  }
 }

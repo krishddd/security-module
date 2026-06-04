@@ -135,6 +135,41 @@ if ($LASTEXITCODE -ne 0) {
 # to the live host:port. Write WITHOUT BOM (pydantic rejects UTF-8 BOM).
 $profileText = Get-Content $ProfilePath -Raw
 $profileText = $profileText -replace '"base_url":\s*"[^"]+"', "`"base_url`": `"http://127.0.0.1:$Port`""
+
+# Resolve a real workspace slug. AnythingLLM's chat endpoints are templated
+# (`/v1/workspace/{slug}/chat`); without substitution, requests hit the SPA
+# fallback handler (returns the HTML index with 200 OK) and chat tests are
+# bogus. Try to find an existing workspace; create one if none exist.
+Write-Host "    Resolving workspace slug..." -ForegroundColor DarkGray
+try {
+    $headers = @{ Authorization = "Bearer $ApiKey"; Accept = "application/json" }
+    $wsList = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/workspaces" -Headers $headers -Method Get -TimeoutSec 10
+    $slug = $null
+    if ($wsList.workspaces -and $wsList.workspaces.Count -gt 0) {
+        $slug = $wsList.workspaces[0].slug
+        Write-Host "      Using existing workspace: $slug" -ForegroundColor DarkGray
+    } else {
+        $body = @{ name = "security-demo" } | ConvertTo-Json
+        $created = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/workspace/new" `
+                    -Headers ($headers + @{ "Content-Type" = "application/json" }) `
+                    -Method Post -Body $body -TimeoutSec 15
+        $slug = $created.workspace.slug
+        Write-Host "      Created workspace: $slug" -ForegroundColor DarkGray
+    }
+    if ($slug) {
+        # Substitute templated path params with the resolved values.
+        $profileText = $profileText -replace '\{slug\}',         $slug
+        $profileText = $profileText -replace '%7Bslug%7D',       $slug
+        $profileText = $profileText -replace '\{workspaceId\}',  $slug
+        $profileText = $profileText -replace '%7BworkspaceId%7D',$slug
+        $profileText = $profileText -replace '\{threadSlug\}',   'default-thread'
+        $profileText = $profileText -replace '%7BthreadSlug%7D', 'default-thread'
+    }
+} catch {
+    Write-Host "      WARN: could not resolve workspace slug ($($_.Exception.Message))" -ForegroundColor Yellow
+    Write-Host "      Chat tests may target the SPA fallback. Create a workspace in the UI and re-run for best results." -ForegroundColor Yellow
+}
+
 [System.IO.File]::WriteAllText($ProfilePath, $profileText, [System.Text.UTF8Encoding]::new($false))
 
 # 5. Plan + Scan
@@ -145,7 +180,7 @@ if ($UseLlm) { $PlanArgs += "--llm" }
 & python (Join-Path $RepoRoot "cli.py") @PlanArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$ScanArgs = @("scan-v3", "--profile", $ProfilePath, "--plan", $PlanPath)
+$ScanArgs = @("scan-v3", "--profile", $ProfilePath, "--plan", $PlanPath, "--allow-internal", "--fingerprint", "--yes")
 if ($UseLlm) { $ScanArgs += "--llm"; $ScanArgs += "--max-llm-spend-usd"; $ScanArgs += "$MaxLlmSpendUsd" }
 & python (Join-Path $RepoRoot "cli.py") @ScanArgs
 $ScanRc = $LASTEXITCODE
