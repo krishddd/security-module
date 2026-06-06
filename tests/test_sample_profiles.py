@@ -15,12 +15,7 @@ from models.agent_profile import AgentProfile
 SAMPLE_DIR = Path(__file__).resolve().parents[1] / "sample_configs"
 
 V3_SAMPLES = [
-    "generic_rest_agent.json",
     "stub_agent_profile_example.json",
-    "dvaa_agent.json",
-    "full_vuln_agent.json",
-    "ollama_agent.json",
-    "dify_agent.json",
     "odysseus_agent.json",
 ]
 

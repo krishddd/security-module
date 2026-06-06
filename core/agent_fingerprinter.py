@@ -537,6 +537,10 @@ def _build_chat_payload(endpoint: EndpointSpec, prompt: str) -> dict[str, Any]:
     if "/workspace/" in path and path.endswith(("/chat", "/stream-chat")):
         return {"message": prompt, "mode": "chat"}
 
+    # Odysseus-style sync chat
+    if path.endswith("/v1/chat") and "model" in props:
+        return {"message": prompt, "model": "gpt-4o-mini"}
+
     # OpenAI-compat: /chat/completions and similar
     if "/chat/completions" in path or "messages" in props:
         return {"messages": [{"role": "user", "content": prompt}]}

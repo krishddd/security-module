@@ -1,21 +1,35 @@
-name: OWASP ASI v3 Security Scan
+name: OWASP ASI Security CI/CD
 
-# v3: agent-agnostic. The workflow takes a base URL + OpenAPI spec URL + an
-# optional auth-token secret name; no hardcoded port 8080, no hardcoded
-# financial-agent config. Any agent that publishes OpenAPI can be scanned.
+# CI/CD for the OWASP ASI v3 security scanner.
+#
+# Three job groups:
+#   1. lint-and-test  — runs on every push / PR. Fast (<2 min). Guards merges.
+#   2. security-scan  — runs on workflow_dispatch and weekly cron. Scans a live
+#                       agent endpoint, uploads SARIF / JUnit / HTML reports.
+#   3. matrix-scan    — runs on workflow_dispatch only. Scans the two reference
+#                       agents (AnythingLLM, Odysseus) in a parallel matrix when
+#                       both are reachable in the runner network.
+#
+# To wire this into GitHub Actions, move this file to:
+#     .github/workflows/security.yml
+# at the PARENT of Security_module/ (its current location is a template).
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       agent_url:
         description: "Base URL of the agent under test (e.g. https://agent.example.com)"
         required: true
       openapi_url:
-        description: "Direct URL to the agent's OpenAPI/Swagger spec. Leave blank to probe well-known paths."
+        description: "Direct OpenAPI/Swagger spec URL (blank = probe well-known paths)"
         required: false
         default: ""
       auth_token_secret:
-        description: "Name of the GitHub Actions secret holding the bearer token. Leave blank for no auth."
+        description: "GitHub secret name holding the bearer token (blank = no auth)"
         required: false
         default: ""
       categories:
@@ -23,32 +37,40 @@ on:
         required: false
         default: ""
       use_llm:
-        description: "Enable LLM planner / synthesizer / triager (requires ANTHROPIC_API_KEY secret)"
+        description: "Enable LLM planner + triage (requires OPENAI_API_KEY or ANTHROPIC_API_KEY)"
         required: false
         default: "false"
       max_llm_spend_usd:
         description: "Hard cap on LLM spend in USD"
         required: false
-        default: "2.00"
+        default: "0.50"
+      fingerprint:
+        description: "Run passive agent fingerprinting before the scan"
+        required: false
+        default: "true"
       allow_internal:
-        description: "Allow RFC1918 / loopback targets (set true only when scanning a self-hosted lab agent)"
+        description: "Allow RFC1918 / loopback (only for self-hosted lab agents)"
         required: false
         default: "false"
   schedule:
-    - cron: "0 2 * * 1"  # Weekly Monday 2am UTC (uses inputs from last manual dispatch)
+    - cron: "0 2 * * 1"  # Weekly Monday 02:00 UTC
 
 env:
   PYTHON_VERSION: "3.11"
 
-jobs:
-  security-scan:
-    name: OWASP ASI v3 Assessment
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+# ----------------------------------------------------------------------------
+# Jobs
+# ----------------------------------------------------------------------------
 
+jobs:
+
+  # 1. Fast CI: lint + unit tests on every push and PR.
+  lint-and-test:
+    name: Lint + Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -57,81 +79,109 @@ jobs:
           cache: pip
 
       - name: Install dependencies
+        working-directory: Security_module
         run: |
-          pip install --upgrade pip
-          pip install -r Security_module/requirements.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Resolve auth-token secret name
-        id: auth
+      - name: Run unit tests
+        working-directory: Security_module
+        run: pytest tests/ -q --ignore=tests/test_scan_v3_live.py
+
+  # 2. On-demand / scheduled scan against a user-supplied agent endpoint.
+  security-scan:
+    name: OWASP ASI Live Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: Security_module
         run: |
-          SECRET_NAME="${{ github.event.inputs.auth_token_secret }}"
-          if [ -n "$SECRET_NAME" ]; then
-            echo "env_flag=--auth-env $SECRET_NAME" >> $GITHUB_OUTPUT
-          else
-            echo "env_flag=" >> $GITHUB_OUTPUT
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Resolve flags
+        id: flags
+        run: |
+          ALLOW=""
+          [ "${{ github.event.inputs.allow_internal }}" = "true" ] && ALLOW="--allow-internal"
+          OPENAPI=""
+          [ -n "${{ github.event.inputs.openapi_url }}" ] && OPENAPI="--openapi-url ${{ github.event.inputs.openapi_url }}"
+          AUTH=""
+          [ -n "${{ github.event.inputs.auth_token_secret }}" ] && AUTH="--auth-env ${{ github.event.inputs.auth_token_secret }}"
+          FP=""
+          [ "${{ github.event.inputs.fingerprint }}" = "true" ] && FP="--fingerprint"
+          LLM=""
+          [ "${{ github.event.inputs.use_llm }}" = "true" ] && LLM="--llm --max-llm-spend-usd ${{ github.event.inputs.max_llm_spend_usd }}"
+          {
+            echo "allow=$ALLOW"
+            echo "openapi=$OPENAPI"
+            echo "auth=$AUTH"
+            echo "fp=$FP"
+            echo "llm=$LLM"
+          } >> $GITHUB_OUTPUT
 
       - name: Discover agent profile
         working-directory: Security_module
         env:
-          # Make every secret in the repo available so --auth-env can resolve
-          # whichever one the user named. Only the value matching the chosen
-          # name is actually read.
           AGENT_TOKEN: ${{ secrets[github.event.inputs.auth_token_secret] }}
         run: |
-          ALLOW_INTERNAL=""
-          if [ "${{ github.event.inputs.allow_internal }}" = "true" ]; then
-            ALLOW_INTERNAL="--allow-internal"
-          fi
-          OPENAPI=""
-          if [ -n "${{ github.event.inputs.openapi_url }}" ]; then
-            OPENAPI="--openapi-url ${{ github.event.inputs.openapi_url }}"
-          fi
           python cli.py discover \
             --url "${{ github.event.inputs.agent_url }}" \
-            $OPENAPI \
-            ${{ steps.auth.outputs.env_flag }} \
-            $ALLOW_INTERNAL \
+            ${{ steps.flags.outputs.openapi }} \
+            ${{ steps.flags.outputs.auth }} \
+            ${{ steps.flags.outputs.allow }} \
             --out profile.json
 
       - name: Build test plan
         working-directory: Security_module
         env:
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          LLM=""
-          if [ "${{ github.event.inputs.use_llm }}" = "true" ]; then
-            LLM="--llm"
-          fi
-          python cli.py plan --profile profile.json $LLM --out plan.json
+          python cli.py plan --profile profile.json ${{ steps.flags.outputs.llm }} --out plan.json
 
-      - name: Run v3 security scan
+      - name: Run scan-v3 (preflight + scan)
+        id: scan
         working-directory: Security_module
         env:
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AGENT_TOKEN: ${{ secrets[github.event.inputs.auth_token_secret] }}
+          AGENT_TOKEN:       ${{ secrets[github.event.inputs.auth_token_secret] }}
         run: |
-          ARGS=""
+          CATS=""
           if [ -n "${{ github.event.inputs.categories }}" ]; then
-            for CAT in $(echo "${{ github.event.inputs.categories }}" | tr ',' ' '); do
-              ARGS="$ARGS --category $CAT"
+            for c in $(echo "${{ github.event.inputs.categories }}" | tr ',' ' '); do
+              CATS="$CATS --category $c"
             done
           fi
-          if [ "${{ github.event.inputs.use_llm }}" = "true" ]; then
-            ARGS="$ARGS --llm --max-llm-spend-usd ${{ github.event.inputs.max_llm_spend_usd }}"
-          fi
-          python cli.py scan-v3 --profile profile.json --plan plan.json $ARGS
-        continue-on-error: true  # collect reports even when critical findings exit non-zero
+          python cli.py scan-v3 \
+            --profile profile.json \
+            --plan plan.json \
+            --yes \
+            ${{ steps.flags.outputs.allow }} \
+            ${{ steps.flags.outputs.fp }} \
+            ${{ steps.flags.outputs.llm }} \
+            $CATS
+        continue-on-error: true
 
-      - name: Find results directory
+      - name: Locate results directory
         id: results
         working-directory: Security_module
         run: |
-          RESULTS_DIR=$(ls -td results/*/ 2>/dev/null | head -1 || true)
-          if [ -n "$RESULTS_DIR" ]; then
-            echo "dir=Security_module/$RESULTS_DIR" >> $GITHUB_OUTPUT
-          fi
-          echo "Results directory: $RESULTS_DIR"
+          DIR=$(ls -td results/*/ 2>/dev/null | head -1 || true)
+          [ -n "$DIR" ] && echo "dir=Security_module/${DIR%/}" >> $GITHUB_OUTPUT
+          echo "Results: $DIR"
 
       - name: Upload SARIF to GitHub Code Scanning
         if: steps.results.outputs.dir != ''
@@ -148,7 +198,7 @@ jobs:
           check_name: "OWASP ASI v3 Security Tests"
           comment_title: "Security Assessment Results"
 
-      - name: Upload full report artifacts
+      - name: Upload report artifacts
         if: steps.results.outputs.dir != '' && always()
         uses: actions/upload-artifact@v4
         with:
@@ -156,26 +206,55 @@ jobs:
           path: ${{ steps.results.outputs.dir }}
           retention-days: 90
 
-      - name: Comment PR with summary
-        if: github.event_name == 'pull_request' && steps.results.outputs.dir != ''
-        uses: actions/github-script@v7
+      - name: Fail job on critical findings
+        if: steps.scan.outcome == 'failure'
+        run: |
+          echo "Scan reported critical findings — job marked as failed."
+          exit 1
+
+  # 3. Matrix scan against both reference agents.
+  #    Off by default — enable when the runner can reach the lab agents.
+  matrix-scan:
+    name: Reference Matrix (${{ matrix.agent }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.agent_url == 'matrix'
+    needs: lint-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: [anythingllm, odysseus]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          script: |
-            const fs = require('fs');
-            const reportPath = '${{ steps.results.outputs.dir }}/report.json';
-            if (!fs.existsSync(reportPath)) return;
-            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-            const score = (report.overall_risk_score || 0).toFixed(1);
-            const summary = report.summary || '(no summary)';
-            const recs = (report.recommendations || []).map(r => `- ${r}`).join('\n');
-            const body = `## OWASP ASI v3 Security Assessment\n\n` +
-              `**Risk Score:** ${score}/10.0\n\n` +
-              `**Target:** \`${report.target_url || 'n/a'}\`\n\n` +
-              `${summary}\n\n` +
-              (recs ? `### Recommendations\n${recs}` : '');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body
-            });
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        working-directory: Security_module
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run reference demo
+        working-directory: Security_module
+        env:
+          ANYTHINGLLM_TOKEN: ${{ secrets.ANYTHINGLLM_TOKEN }}
+          ODYSSEUS_TOKEN:    ${{ secrets.ODYSSEUS_TOKEN }}
+          OPENAI_API_KEY:    ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          bash demo/run_${{ matrix.agent }}_demo.sh \
+            --skip-docker-bootstrap \
+            --use-llm \
+            --max-llm-spend-usd 0.50
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-asi-v3-${{ matrix.agent }}-${{ github.run_number }}
+          path: Security_module/results/
+          retention-days: 30

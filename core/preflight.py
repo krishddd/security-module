@@ -173,6 +173,12 @@ def _build_chat_payload(endpoint: EndpointSpec, prompt: str) -> dict[str, Any]:
     if "/workspace/" in path and path.endswith(("/chat", "/stream-chat")):
         return {"message": prompt, "mode": "chat"}
 
+    # Odysseus-style sync chat: schema accepts an optional `model` but the
+    # configured default may be an embedding model (404). Pass an explicit
+    # chat model so the round-trip actually succeeds.
+    if path.endswith("/v1/chat") and "model" in props:
+        return {"message": prompt, "model": "gpt-4o-mini"}
+
     if "/chat/completions" in path or "messages" in props:
         return {"messages": [{"role": "user", "content": prompt}]}
 
@@ -417,6 +423,10 @@ class Preflight:
         resp = await self.adapter.invoke(ep, payload)
         status = int(getattr(resp, "status_code", 0))
         latency = float(getattr(resp, "latency_ms", 0.0))
+        raw_text = getattr(resp, "raw_text", "") or ""
+        body_text = _extract_text(resp)
+
+        # Connection-level failure (no response at all) or 5xx → HARD-STOP.
         if status == 0 or status >= 500:
             err = getattr(resp, "error", f"status={status}")
             return PreflightCheck(
@@ -425,15 +435,50 @@ class Preflight:
                 latency_ms=latency,
                 evidence=f"POST {ep.path} failed: {err}",
             )
+
+        # 4xx with a JSON `detail` body = chat route exists and responded;
+        # the agent rejected our specific payload or has an upstream config
+        # problem (e.g., wrong LLM model). Downgrade to WARN — non-chat
+        # testers can still produce useful findings.
         if not (200 <= status < 400):
+            detail_msg = ""
+            if isinstance(getattr(resp, "data", None), dict):
+                v = resp.data.get("detail")
+                if isinstance(v, str):
+                    detail_msg = v
+                elif isinstance(v, list) and v:
+                    detail_msg = str(v[0])[:200]
+            looks_jsonish = (raw_text.lstrip().startswith("{") or raw_text.lstrip().startswith("["))
+            if looks_jsonish or detail_msg:
+                return PreflightCheck(
+                    name="chat_round_trip",
+                    status="warn",
+                    latency_ms=latency,
+                    evidence=f"POST {ep.path} -> {status} (chat route responded but rejected probe: {_excerpt(detail_msg, 120)})",
+                    detail={"status_code": status, "detail": detail_msg},
+                )
             return PreflightCheck(
                 name="chat_round_trip",
                 status="hard_stop",
                 latency_ms=latency,
                 evidence=f"POST {ep.path} -> {status}",
             )
-        # Extract a human-readable excerpt for visible proof.
-        body_text = _extract_text(resp)
+
+        # 2xx/3xx but body is HTML = SPA fallback. The scanner is talking to
+        # the agent's frontend, not its API. HARD-STOP — every subsequent
+        # chat-based test would be bogus.
+        if _looks_like_html_body(raw_text):
+            return PreflightCheck(
+                name="chat_round_trip",
+                status="hard_stop",
+                latency_ms=latency,
+                evidence=(
+                    f"POST {ep.path} -> {status} returned HTML (SPA fallback). "
+                    "Check the base_url prefix or chat endpoint path."
+                ),
+            )
+
+        # Real text reply — green.
         excerpt = _excerpt(body_text)
         return PreflightCheck(
             name="chat_round_trip",
@@ -494,6 +539,14 @@ class Preflight:
             evidence=f"{reachable}/{get_count} GET endpoints reachable ({total} total)",
             detail={"reachable_get": reachable, "total_get": get_count, "total": total},
         )
+
+
+def _looks_like_html_body(text: str) -> bool:
+    """True if the response body is the SPA fallback HTML."""
+    if not text:
+        return False
+    head = text.lstrip()[:200].lower()
+    return head.startswith("<!doctype") or head.startswith("<html")
 
 
 def _extract_text(resp: Any) -> str:

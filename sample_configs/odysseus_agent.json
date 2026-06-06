@@ -19,10 +19,13 @@
     {"path": "/api/auth/me",         "method": "GET",  "purpose": "auth",         "auth_required": true,  "tags": ["auth"],            "operation_id": "me"},
     {"path": "/api/auth/tokens",     "method": "GET",  "purpose": "memory_read",  "auth_required": true,  "tags": ["auth","tokens"],   "operation_id": "list_tokens"},
     {"path": "/api/auth/tokens",     "method": "POST", "purpose": "auth",         "auth_required": true,  "tags": ["auth","tokens"],   "operation_id": "create_token"},
-    {"path": "/api/chat/completions","method": "POST", "purpose": "chat",         "auth_required": true,  "tags": ["chat"],            "operation_id": "chat_completions",
-     "request_schema": {"type": "object", "properties": {"model": {"type": "string"}, "messages": {"type": "array"}, "stream": {"type": "boolean"}}}},
+    {"path": "/api/v1/chat",         "method": "POST", "purpose": "chat",         "auth_required": true,  "tags": ["chat"],            "operation_id": "sync_chat",
+     "summary": "Synchronous chat (preferred for security probes — returns complete reply)",
+     "request_schema": {"type": "object", "properties": {"message": {"type": "string"}, "model": {"type": "string"}, "session": {"type": "string"}}, "required": ["message"]}},
+    {"path": "/api/chat",            "method": "POST", "purpose": "chat",         "auth_required": true,  "tags": ["chat"],            "operation_id": "chat",
+     "request_schema": {"type": "object", "properties": {"message": {"type": "string"}, "session": {"type": "string"}, "use_web": {"type": "boolean"}}, "required": ["message"]}},
+    {"path": "/api/chat_stream",     "method": "POST", "purpose": "chat",         "auth_required": true,  "tags": ["chat","stream"],   "operation_id": "chat_stream"},
     {"path": "/api/chat/sessions",   "method": "GET",  "purpose": "memory_read",  "auth_required": true,  "tags": ["chat","sessions"], "operation_id": "list_sessions"},
-    {"path": "/api/chat/sessions",   "method": "POST", "purpose": "chat",         "auth_required": true,  "tags": ["chat","sessions"], "operation_id": "create_session"},
     {"path": "/api/chat/sessions/{id}","method": "GET","purpose": "memory_read",  "auth_required": true,  "tags": ["chat","sessions"], "operation_id": "get_session"},
     {"path": "/api/chat/sessions/{id}","method": "DELETE","purpose": "memory_write","auth_required": true, "tags": ["chat","sessions"],"operation_id": "delete_session"},
     {"path": "/api/agent/run",       "method": "POST", "purpose": "tool_invoke",  "auth_required": true,  "tags": ["agent","run"],     "operation_id": "agent_run",
@@ -57,7 +60,7 @@
     {"name": "web_fetch",         "description": "Fetch arbitrary URL (SSRF vector)",                  "parameters": {"url": "str"},   "inferred_capability": "web_browse"},
     {"name": "create_skill",      "description": "Inject custom skill / tool definition",              "parameters": {"name": "str"},  "inferred_capability": "tool_invoke"},
     {"name": "register_mcp_server","description": "Register MCP server (tool poisoning vector)",       "parameters": {"url": "str"},   "inferred_capability": "tool_invoke"},
-    {"name": "chat_completions",  "description": "OpenAI-compatible chat",                             "parameters": {"messages": "array"}, "inferred_capability": "tool_invoke"}
+    {"name": "sync_chat",         "description": "Synchronous chat — single message in, single reply out",  "parameters": {"message": "str"}, "inferred_capability": "tool_invoke"}
   ],
   "inferred_capabilities": [
     "code_execution", "shell_exec", "file_read", "file_write", "tool_invoke",
