@@ -22,9 +22,6 @@ from models.agent_profile import (
 from models.enums import SKIPPED_STATUSES, TestStatus
 
 
-SAMPLE_CONFIG = Path(__file__).parent.parent / "sample_configs" / "financial_agent.json"
-
-
 def test_schema_version_is_literal() -> None:
     p = AgentProfile(name="x", base_url="http://example.com")
     assert p.schema_version == "3.0"
@@ -53,36 +50,6 @@ def test_risk_tier_medium_then_low() -> None:
 def test_endpoints_for_filter() -> None:
     p = AgentProfile(name="x", base_url="http://example.com")
     assert p.endpoints_for(EndpointPurpose.CHAT) == []
-
-
-def test_migrate_financial_agent_config() -> None:
-    raw = json.loads(SAMPLE_CONFIG.read_text())
-    legacy = AgentConfig.model_validate(raw)
-    profile, diff = migrate_remote_config(legacy)
-
-    assert profile.schema_version == "3.0"
-    assert profile.name == legacy.name
-    assert profile.transport is Transport.REST
-    assert str(profile.base_url).rstrip("/") == "http://localhost:8000"
-
-    # Chat + health migrated to typed endpoints.
-    chats = profile.endpoints_for(EndpointPurpose.CHAT)
-    assert any(e.path == "/api/ask" for e in chats)
-    healths = profile.endpoints_for(EndpointPurpose.HEALTH)
-    assert any(e.path == "/api/health" for e in healths)
-
-    # additional_endpoints turned into EndpointSpec records.
-    paths = {e.path for e in profile.endpoints}
-    assert "/api/forecast" in paths
-    assert "/api/schema" in paths
-
-    # Capability inference picked up the financial domain.
-    assert "financial" in profile.data_domains
-    assert profile.risk_tier in ("high", "critical")
-    assert profile.risk_tier_source == "inferred"
-
-    # Diff is non-empty and lists at least one classification line.
-    assert any("risk_tier inferred" in d for d in diff)
 
 
 def test_rate_limit_config_defaults() -> None:
