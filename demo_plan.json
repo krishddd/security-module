@@ -9,23 +9,111 @@
       "priority": 10,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     },
     {
       "category": "ASI02",
       "include": true,
-      "priority": 0,
+      "priority": 10,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     },
     {
       "category": "ASI03",
       "include": true,
-      "priority": 20,
+      "priority": 10,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI05",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI08",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "ASI10",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT01",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT02",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT03",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT10",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT11",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT14",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT16",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT17",
+      "include": true,
+      "priority": 10,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
     },
     {
       "category": "ASI04",
@@ -36,33 +124,17 @@
       "use_llm_synthesis": false
     },
     {
-      "category": "ASI05",
+      "category": "ASI06",
       "include": true,
-      "priority": 5,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
       "use_llm_synthesis": false
-    },
-    {
-      "category": "ASI06",
-      "include": true,
-      "priority": 15,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
     },
     {
       "category": "ASI07",
-      "include": false,
-      "priority": 50,
-      "skip_reason": "No inter-agent communication detected",
-      "max_payloads": 20,
-      "use_llm_synthesis": false
-    },
-    {
-      "category": "ASI08",
       "include": true,
-      "priority": 25,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
       "use_llm_synthesis": false
@@ -70,47 +142,15 @@
     {
       "category": "ASI09",
       "include": true,
-      "priority": 35,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "ASI10",
-      "include": true,
-      "priority": 40,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT01",
-      "include": true,
-      "priority": 45,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT02",
-      "include": true,
-      "priority": 50,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT03",
-      "include": true,
-      "priority": 55,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     },
     {
       "category": "EXT04",
       "include": true,
-      "priority": 60,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
       "use_llm_synthesis": false
@@ -118,31 +158,55 @@
     {
       "category": "EXT05",
       "include": true,
-      "priority": 65,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     },
     {
       "category": "EXT06",
       "include": true,
-      "priority": 70,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     },
     {
       "category": "EXT07",
       "include": true,
-      "priority": 75,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     },
     {
       "category": "EXT08",
       "include": true,
-      "priority": 80,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT12",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT13",
+      "include": true,
+      "priority": 30,
+      "skip_reason": null,
+      "max_payloads": 20,
+      "use_llm_synthesis": false
+    },
+    {
+      "category": "EXT15",
+      "include": true,
+      "priority": 30,
       "skip_reason": null,
       "max_payloads": 20,
       "use_llm_synthesis": false
@@ -150,86 +214,21 @@
     {
       "category": "EXT09",
       "include": true,
-      "priority": 85,
+      "priority": 50,
       "skip_reason": null,
       "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT10",
-      "include": true,
-      "priority": 90,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT11",
-      "include": true,
-      "priority": 95,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT12",
-      "include": true,
-      "priority": 100,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT13",
-      "include": true,
-      "priority": 105,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT14",
-      "include": true,
-      "priority": 110,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT15",
-      "include": true,
-      "priority": 115,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT16",
-      "include": true,
-      "priority": 120,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
-    },
-    {
-      "category": "EXT17",
-      "include": true,
-      "priority": 125,
-      "skip_reason": null,
-      "max_payloads": 20,
-      "use_llm_synthesis": true
+      "use_llm_synthesis": false
     }
   ],
   "cost_estimate": {
-    "projected_llm_calls": 1,
+    "projected_llm_calls": 0,
     "projected_input_tokens": 0,
     "projected_output_tokens": 0,
-    "projected_usd": 0.017032,
+    "projected_usd": 0.0,
     "notes": [
-      "LLM planner used",
-      "The agent has a high risk tier with capabilities for code execution, file operations, and SQL queries, making it susceptible to a wide range of security risks. LLM synthesis is used for categories where target-specific payload mutation is beneficial."
+      "stub planner: no LLM calls projected"
     ]
   },
-  "planner": "llm",
-  "notes": "The agent has a high risk tier with capabilities for code execution, file operations, and SQL queries, making it susceptible to a wide range of security risks. LLM synthesis is used for categories where target-specific payload mutation is beneficial."
+  "planner": "stub",
+  "notes": "Phase-3 stub planner — every applicable category runs with seed payloads only."
 }

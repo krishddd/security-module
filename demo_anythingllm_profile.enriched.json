@@ -1933,7 +1933,7 @@
         "tier": "passive",
         "classification_path": "regex",
         "request_excerpt": "ping",
-        "response_excerpt": "{\"id\":\"f4e9045e-ada2-466e-adc9-bc8340b1de73\",\"type\":\"textResponse\",\"close\":true,\"error\":null,\"chatId\":14,\"textResponse\":\"pong\",\"sources\":[],\"metrics\":{\"prompt_tokens\":257,\"completion_tokens\":2,\"total_tokens\":259,\"outputTps\":2.[REDACTED_CC],\"duration\":0.857,\"model\":\"gpt-4o\",\"provider\":\"OpenAiLLM\",\"timestamp\":\"2026-06-06T15:27:57.885Z\"}}",
+        "response_excerpt": "{\"id\":\"1463e680-b837-40b4-8e78-a7767911d7e0\",\"type\":\"textResponse\",\"close\":true,\"error\":null,\"chatId\":23,\"textResponse\":\"pong\",\"sources\":[],\"metrics\":{\"prompt_tokens\":433,\"completion_tokens\":2,\"total_tokens\":435,\"outputTps\":1.[REDACTED_CC],\"duration\":1.041,\"model\":\"gpt-4o\",\"provider\":\"OpenAiLLM\",\"timestamp\":\"2026-06-11T06:01:15.066Z\"}}",
         "verdict": "custom"
       }
     ],

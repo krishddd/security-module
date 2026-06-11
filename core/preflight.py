@@ -227,11 +227,27 @@ class Preflight:
         self.adapter = adapter
         self.options = options or PreflightOptions()
 
-    async def run(self) -> PreflightResult:
+    async def run(
+        self, on_check: Callable[[PreflightCheck], None] | None = None
+    ) -> PreflightResult:
+        """Run the rubric checks.
+
+        ``on_check`` is an optional callback invoked with each ``PreflightCheck``
+        as soon as it completes — used by the web UI to stream the preflight
+        table live. It never affects control flow; exceptions in it are ignored.
+        """
         result = PreflightResult(
             profile_name=self.profile.name,
             base_url=str(self.profile.base_url),
         )
+
+        def _notify(check: PreflightCheck) -> None:
+            if on_check is None:
+                return
+            try:
+                on_check(check)
+            except Exception:  # a UI callback must never break preflight
+                logger.debug("preflight on_check callback raised", exc_info=True)
 
         # Ordered check list. HARD-STOP aborts subsequent checks.
         steps: list[tuple[str, Callable[[], Any], bool]] = [
@@ -256,12 +272,12 @@ class Preflight:
                     evidence=f"check crashed: {e!s}",
                 )
             result.checks.append(check)
+            if check.status == "hard_stop" and self.options.warn_only:
+                check.status = "warn"  # downgrade
+            _notify(check)
             if check.status == "hard_stop":
-                if self.options.warn_only:
-                    check.status = "warn"  # downgrade
-                else:
-                    result.overall = "hard_stop"
-                    return result
+                result.overall = "hard_stop"
+                return result
 
         if result.has_warn():
             result.overall = "warn"

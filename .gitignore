@@ -44,6 +44,11 @@ data/*.sqlite3
 *.docx
 *.pdf
 
+# Compiled binaries
+*.exe
+*.out
+*.bin
+
 # OS
 .DS_Store
 Thumbs.db
