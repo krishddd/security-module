@@ -438,6 +438,12 @@ class Preflight:
         payload = _build_chat_payload(ep, self.options.chat_prompt)
         resp = await self.adapter.invoke(ep, payload)
         status = int(getattr(resp, "status_code", 0))
+        # A cold agent (model load, upstream warm-up) can blow the adapter
+        # timeout on the very first chat. One retry separates "slow to wake
+        # up" from "down" before we hard-stop the whole scan.
+        if status == 0:
+            resp = await self.adapter.invoke(ep, payload)
+            status = int(getattr(resp, "status_code", 0))
         latency = float(getattr(resp, "latency_ms", 0.0))
         raw_text = getattr(resp, "raw_text", "") or ""
         body_text = _extract_text(resp)

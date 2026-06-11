@@ -158,6 +158,9 @@ func (h *hub) run(agentKey, tokenOverride string, llm bool) error {
 
 	cmd := exec.Command("powershell.exe", args...)
 	cmd.Dir = h.root
+	// Piped stdout makes Python fall back to cp1252, which crashes Rich on
+	// non-Latin-1 glyphs (e.g. the ∞ in scan-v3 output). Force UTF-8.
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

@@ -77,6 +77,44 @@ pre { background: #0d1117; padding: 0.8rem; border-radius: 4px; overflow-x: auto
   <p>{{ report.summary }}</p>
 </div>
 
+{% if discovered_tools or discovered_capabilities %}
+<h2>Attack Surface</h2>
+<p style="color: var(--muted); font-size: 0.85rem">
+  Statically discovered from the agent's API spec during the <code>discover</code> stage.
+  This is the declared surface — distinct from what the agent self-reports over chat
+  (see <em>Agent Identity → Tools Discovered</em> below).
+</p>
+<div class="grid">
+  <div class="card">
+    <h3>Capabilities ({{ discovered_capabilities|length }})</h3>
+    {% if discovered_capabilities %}
+      <p>{% for c in discovered_capabilities %}<code>{{ c }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% else %}
+      <p style="color: var(--muted)"><em>None inferred</em></p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Endpoints</h3>
+    <p>{{ discovered_endpoint_count }} declared</p>
+  </div>
+</div>
+{% if discovered_tools %}
+<div class="card" style="margin-top:1rem">
+  <h3>Tools ({{ discovered_tools|length }})</h3>
+  <table>
+    <tr><th>Tool</th><th>Capability</th><th>Description</th></tr>
+    {% for t in discovered_tools %}
+    <tr>
+      <td><code>{{ t.name }}</code></td>
+      <td>{{ t.capability }}</td>
+      <td style="color: var(--muted); font-size: 0.85rem">{{ t.description[:100] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
 {% if fingerprint_evidence %}
 <h2>Agent Identity</h2>
 {% if fingerprint_regex_only %}
@@ -256,10 +294,30 @@ def save_html_report(report: SecurityReport, output_path: Path, profile=None) ->
             if name not in detected_tools_clean:
                 detected_tools_clean.append(name)
 
+    # Statically-discovered attack surface (from the profile, independent of the
+    # behavioral fingerprint). Shown so the report reflects the tools/capabilities
+    # the discover stage found, not just what the agent self-reports over chat.
+    discovered_tools = [
+        {
+            "name": getattr(t, "name", ""),
+            "capability": getattr(getattr(t, "inferred_capability", None), "value", "unknown"),
+            "description": getattr(t, "description", "") or "",
+        }
+        for t in (getattr(profile, "tools", []) or [])
+    ]
+    discovered_capabilities = [
+        getattr(c, "value", str(c))
+        for c in (getattr(profile, "inferred_capabilities", []) or [])
+    ]
+    discovered_endpoint_count = len(getattr(profile, "endpoints", []) or [])
+
     template = _JINJA_ENV.from_string(HTML_TEMPLATE)
     html = template.render(
         report=report,
         score_class=score_class,
+        discovered_tools=discovered_tools,
+        discovered_capabilities=discovered_capabilities,
+        discovered_endpoint_count=discovered_endpoint_count,
         fingerprint_evidence=fingerprint_evidence,
         fingerprint_regex_only=fingerprint_regex_only,
         any_chat_failed=any_chat_failed,

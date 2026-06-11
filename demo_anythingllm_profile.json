@@ -1813,7 +1813,7 @@
       "name": "POST__v1_document_upload-link",
       "description": "POST /v1/document/upload-link",
       "parameters": {},
-      "inferred_capability": "file_write"
+      "inferred_capability": "web_browse"
     },
     {
       "name": "GET__v1_document_accepted-file-types",
