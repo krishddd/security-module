@@ -31,6 +31,16 @@ credentials.json
 token.json
 service-account*.json
 
+# Per-run build artifacts written by the demo scripts. These now live under
+# .work/, but keep the legacy root patterns too for older checkouts.
+.work/
+.deepeval/
+demo_*_openapi.json
+demo_plan.json
+*_profile.json
+*.enriched.json
+!sample_configs/*_agent.json
+
 # Generated data
 chroma_db/
 data/chroma/

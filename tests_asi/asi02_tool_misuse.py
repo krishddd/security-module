@@ -174,7 +174,7 @@ class ASI02ToolMisuseTester(BaseASITester):
                 resp.status_code != 200
                 or "cartesian" in resp.raw_text.lower()
                 or "warning" in resp.raw_text.lower()
-                or resp.latency_ms < self.baseline.p95_ms * 2
+                or resp.latency_ms < self.dos_threshold_ms()
             )
 
             self.record_finding(

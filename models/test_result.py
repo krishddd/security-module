@@ -127,18 +127,31 @@ class SecurityReport:
     baseline: BaselineProfile = field(default_factory=BaselineProfile)
     categories: list[CategoryResult] = field(default_factory=list)
     overall_risk_score: float = 0.0
+    breadth_score: float = 0.0
     summary: str = ""
     recommendations: list[str] = field(default_factory=list)
 
     def compute_overall_score(self) -> None:
-        if not self.categories:
+        """Headline risk = worst-case category, not an average.
+
+        The previous implementation took a severity-weighted MEAN across all
+        ~27 categories. With most categories scoring 0, that diluted a single
+        critical category (e.g. ASI03 at 8.9) down to a "LOW 1.3" headline —
+        a security scanner must not report LOW while a critical is unmitigated.
+        The headline is now the highest category risk; the weighted mean is
+        retained separately as ``breadth_score`` (how widespread issues are).
+        """
+        scored = [c for c in self.categories if c.tests_run > c.tests_skipped]
+        if not scored:
             self.overall_risk_score = 0.0
+            self.breadth_score = 0.0
             return
-        total_weight = sum(c.category.default_severity.weight for c in self.categories)
+        self.overall_risk_score = max(c.risk_score for c in scored)
+        total_weight = sum(c.category.default_severity.weight for c in scored)
         weighted_sum = sum(
-            c.risk_score * c.category.default_severity.weight for c in self.categories
+            c.risk_score * c.category.default_severity.weight for c in scored
         )
-        self.overall_risk_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+        self.breadth_score = weighted_sum / total_weight if total_weight > 0 else 0.0
 
     def compute_summary(self) -> None:
         total_tests = sum(c.tests_run for c in self.categories)
@@ -181,6 +194,7 @@ class SecurityReport:
             "duration_seconds": round(self.duration_seconds, 2),
             "baseline": self.baseline.to_dict(),
             "overall_risk_score": round(self.overall_risk_score, 2),
+            "breadth_score": round(self.breadth_score, 2),
             "summary": self.summary,
             "recommendations": self.recommendations,
             "categories": [c.to_dict() for c in self.categories],

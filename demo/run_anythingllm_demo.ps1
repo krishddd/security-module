@@ -31,8 +31,12 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Compose = Join-Path $PSScriptRoot "docker-compose.anythingllm.yml"
-$ProfilePath = Join-Path $RepoRoot "demo_anythingllm_profile.json"
-$PlanPath = Join-Path $RepoRoot "demo_plan.json"
+# Per-run build artifacts (profile, plan, OpenAPI spec) live under .work/ so
+# they never clutter the repo root. The folder is gitignored.
+$WorkDir = Join-Path $RepoRoot ".work"
+if (-not (Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir | Out-Null }
+$ProfilePath = Join-Path $WorkDir "demo_anythingllm_profile.json"
+$PlanPath = Join-Path $WorkDir "demo_plan.json"
 
 Write-Host ""
 Write-Host "===== ASI v3 demo: scanning LIVE ANYTHINGLLM =====" -ForegroundColor Cyan
@@ -108,7 +112,7 @@ $env:ANYTHINGLLM_TOKEN = $ApiKey
 # 4. Extract OpenAPI spec from container + auto-discover
 Write-Host ""
 Write-Host "[4/6] Extracting OpenAPI spec from the AnythingLLM container..." -ForegroundColor Yellow
-$SpecPath = Join-Path $RepoRoot "demo_anythingllm_openapi.json"
+$SpecPath = Join-Path $WorkDir "demo_anythingllm_openapi.json"
 docker cp anythingllm_demo:/app/server/swagger/openapi.json $SpecPath
 if ($LASTEXITCODE -ne 0) {
     Write-Host "docker cp failed. Is the container named 'anythingllm_demo' running?" -ForegroundColor Red

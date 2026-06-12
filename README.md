@@ -194,7 +194,9 @@ llm/
 └── planner.py                Plan assembly from SKILL packs + fingerprint
 models/
 └── agent_profile.py          Pydantic schema for target profiles
-tests_asi/                    17 extended ASI suites
+tests_asi/                    Scanner tester modules (ASI01-10 + EXT suites).
+                              NOTE: production code, not unit tests — these are
+                              the attack/probe suites the runner executes.
 reporting/
 └── html_reporter.py          Posture HTML report
 demo/
@@ -202,8 +204,10 @@ demo/
 ├── run_odysseus_demo.ps1
 └── run_anythingllm_demo.ps1
 sample_configs/
-└── odysseus_agent.json
+└── odysseus_agent.json       Committed agent profiles (read-only input)
 tests/                        Unit tests (fingerprinter, preflight, profiles)
+results/                      Per-run reports          (gitignored)
+.work/                        Per-run build artifacts  (gitignored)
 ```
 
 ---

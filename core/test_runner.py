@@ -283,6 +283,13 @@ class SecurityTestRunner:
         if adapter is None:
             adapter = make_adapter(profile)
 
+        # Establish a latency baseline so DoS/timeout testers (ASI08, EXT*) can
+        # use a relative threshold (p95 * multiplier). Without this the baseline
+        # stays at its p95=0 default and every latency comparison (`latency < 0`)
+        # registers as a vulnerability — the "threshold 0ms" false positives.
+        if not self.baseline.samples:
+            self.baseline = await self._establish_baseline_v3(adapter)
+
         # UNION: confirmed_capabilities can only ADD coverage, never replace.
         profile_caps = set(profile.inferred_capabilities) | set(
             getattr(profile, "confirmed_capabilities", None) or []
@@ -465,6 +472,83 @@ class SecurityTestRunner:
 
         return report
 
+    async def _establish_baseline_v3(self, adapter: Any) -> BaselineProfile:
+        """Measure chat latency so DoS testers get a relative threshold.
+
+        Sends a handful of benign prompts through the adapter's CHAT endpoint
+        and records mean/p95/stddev. Returns an empty BaselineProfile on any
+        failure (no CHAT endpoint, network error) — latency testers fall back
+        to an absolute ceiling when ``samples == 0``.
+        """
+        import statistics
+        from models.agent_profile import EndpointPurpose
+
+        try:
+            from core.preflight import _build_chat_payload
+        except Exception:
+            _build_chat_payload = None
+
+        try:
+            chat = adapter.find_endpoints_for(EndpointPurpose.CHAT)
+        except Exception:
+            chat = []
+        if not chat:
+            return BaselineProfile()
+
+        endpoint = chat[0]
+        query = "What is 2 + 2?"
+        latencies: list[float] = []
+        for _ in range(5):
+            try:
+                payload = _build_chat_payload(endpoint, query) if _build_chat_payload else {"question": query}
+            except Exception:
+                payload = {"question": query}
+            try:
+                resp = await adapter.invoke(endpoint, payload)
+            except Exception as e:
+                logger.debug(f"baseline probe failed: {e}")
+                continue
+            if int(getattr(resp, "status_code", 0) or 0) and 200 <= resp.status_code < 400:
+                latencies.append(float(getattr(resp, "latency_ms", 0.0)))
+
+        if not latencies:
+            logger.info("Baseline: no successful probes; latency testers will use absolute ceiling")
+            return BaselineProfile()
+
+        latencies.sort()
+        p95 = latencies[min(len(latencies) - 1, int(round(0.95 * (len(latencies) - 1))))]
+        baseline = BaselineProfile(
+            mean_ms=statistics.fmean(latencies),
+            p95_ms=p95,
+            stddev_ms=statistics.pstdev(latencies) if len(latencies) > 1 else 0.0,
+            samples=len(latencies),
+            baseline_query=query,
+        )
+        logger.info(
+            f"Baseline established: mean={baseline.mean_ms:.0f}ms p95={baseline.p95_ms:.0f}ms "
+            f"({baseline.samples} samples)"
+        )
+        return baseline
+
+    @staticmethod
+    def _has_structural_proof(evidence: Any) -> bool:
+        """True when a VULN is backed by a hard, non-heuristic signal.
+
+        Such findings are trusted as-is and skip the LLM judge: an explicit
+        4xx/5xx status, an ``is_safe: false`` flag, or named security threats
+        are deterministic — only the soft keyword/fuzzy verdicts need a judge.
+        """
+        if not isinstance(evidence, dict):
+            return False
+        if evidence.get("threats"):
+            return True
+        if evidence.get("is_safe") is False:
+            return True
+        status = evidence.get("status_code")
+        if isinstance(status, int) and status >= 400:
+            return True
+        return False
+
     def _run_post_scan_triage(self, report: SecurityReport, llm_context: Any) -> None:
         """Send ambiguous findings to the LLM triager; update is_exploited/status."""
         from config.settings import TRIAGE_AMBIGUITY_BAND
@@ -472,7 +556,15 @@ class SecurityTestRunner:
         from models.enums import TestStatus
 
         triager = llm_context.triager
-        # Build the queue: ambiguous-confidence findings that actually ran.
+        # Build the queue. Two classes get judged:
+        #   1. Ambiguous-confidence findings (fuzzy semantic detector).
+        #   2. "Soft" VULNs — a FAILED verdict with no HARD structural proof
+        #      (no 4xx/5xx, no is_safe=false, no explicit threats). These are
+        #      keyword/heuristic decisions (e.g. EXT13 extraction, EXT05
+        #      consistency) that are prone to false positives, so the LLM judge
+        #      confirms or overturns each one. Findings backed by a real
+        #      structural signal are trusted as-is and skip the judge.
+        MAX_TRIAGE = 80
         queue: list[tuple[Any, FindingForTriage]] = []
         for cat in report.categories:
             for f in cat.findings:
@@ -485,8 +577,17 @@ class SecurityTestRunner:
                     sc = ev.get("similarity_score")
                     if isinstance(sc, (int, float)):
                         conf = float(sc) / 100.0
-                if not is_ambiguous(conf, TRIAGE_AMBIGUITY_BAND):
+                soft_vuln = (
+                    f.status == TestStatus.FAILED
+                    and not self._has_structural_proof(ev)
+                )
+                if not (is_ambiguous(conf, TRIAGE_AMBIGUITY_BAND) or soft_vuln):
                     continue
+                if len(queue) >= MAX_TRIAGE:
+                    logger.warning(
+                        "post-scan triage: queue capped at %d; remaining soft "
+                        "findings left as detector-decided", MAX_TRIAGE)
+                    break
                 queue.append((f, FindingForTriage(
                     finding_id=f.test_id or f.test_name or f"{cat.category.value}_{len(queue)}",
                     category=cat.category.value,
@@ -494,11 +595,13 @@ class SecurityTestRunner:
                     response=str(getattr(f, "response_summary", "") or "")[:4000],
                     confidence=conf,
                 )))
+            if len(queue) >= MAX_TRIAGE:
+                break
 
         if not queue:
             return
 
-        logger.info("post-scan triage: %d ambiguous findings", len(queue))
+        logger.info("post-scan triage: %d findings sent to LLM judge", len(queue))
         try:
             verdicts = triager.triage_batch([q[1] for q in queue])
         except Exception as e:

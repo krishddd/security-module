@@ -8,72 +8,53 @@ version = "1.0.0"
 description = "OWASP ASI Top 10 Security Testing Platform for Agentic AI Systems"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+readme = "README.md"
+
+# Core runtime dependencies — everything needed to run a scan WITHOUT --llm.
+# Lower bounds are the minimum verified versions; pin exact builds via the
+# generated requirements.lock for reproducible installs.
 dependencies = [
-    "httpx>=0.27.0",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "python-dotenv>=1.0.0",
-    "click>=8.0",
-    "rich>=13.0",
-    "jinja2>=3.0",
-    "rapidfuzz>=3.0",
-    "aiohttp>=3.9.0",
+    "httpx>=0.27,<1.0",
+    "pydantic>=2.6,<3.0",
+    "pydantic-settings>=2.1,<3.0",
+    "python-dotenv>=1.0,<2.0",
+    "click>=8.1,<9.0",
+    "rich>=13.7,<15.0",
+    "jinja2>=3.1,<4.0",
+    "markupsafe>=2.1,<4.0",
+    "rapidfuzz>=3.6,<4.0",
+    "aiohttp>=3.9,<4.0",
 ]
 
 [project.optional-dependencies]
-network = [
-    "langchain>=0.3.0",
-    "langgraph>=0.2.0",
-    "langchain-ollama>=0.2.0",
-    "langchain-core>=0.3.0",
-    "filelock>=3.13",
-    "tiktoken>=0.7.0",
-    # YAML loader for CVE checks + c2_profile
-    "pyyaml>=6.0",
-    # Cross-engagement RAG cosine similarity; pure-python fallback exists
-    "numpy>=1.24",
-    # Pure-Python redesign deps (replaces all Go/binary dependencies)
-    "httpx>=0.25",
-    "pydantic>=2.0",
-    "dnspython>=2.4",          # DNS resolution (replaces dnsx binary)
-    "beautifulsoup4>=4.12",    # JS endpoint extraction (replaces getJS/LinkFinder)
-    "lxml>=5.0",               # BeautifulSoup parser backend
-    "pyjwt>=2.8",              # JWT scanning (replaces jwt_tool binary)
-    "cryptography>=42.0",      # TLS audit + JWT crypto (replaces ssl-only approach)
-    # python-whois is optional; RDAP fallback works without it
-    # "python-whois>=0.9",     # uncomment to enable whois lib fallback
+# LLM-assisted planning/triage/fingerprinting (the --llm flag). Install at
+# least one provider; the framework auto-detects based on which API key is set.
+llm = [
+    "openai>=1.50,<2.0",
+    "anthropic>=0.40,<1.0",
 ]
-network-browser = [
-    # Optional Playwright browser layer for DOM XSS + auth flows.
-    # After installing: playwright install chromium
-    "playwright>=1.40",
+# Test + lint tooling.
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.23,<0.25",
 ]
-network-precise = [
-    "transformers>=4.40",
-    "tokenizers>=0.19",
+# Deliberately-vulnerable FastAPI fixture used only by the unit tests.
+stub = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn>=0.27,<1.0",
 ]
-# HTTP service — lets operators click-run engagements via a curated allowlist UI.
-api = [
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
-]
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["network_pipeline*"]
-
-[tool.setuptools.package-data]
-"network_pipeline.skills.checks.wordlists" = ["*.txt"]
-"network_pipeline.skills.checks" = ["params.txt", "cves/*.yaml"]
-"network_pipeline.agents.prompts" = ["*.md"]
-"network_pipeline.skills" = ["**/*.md", "**/*.yaml"]
 
 [project.scripts]
 asi-scan = "cli:cli"
-network-pipeline = "network_pipeline.cli:cli"
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests_asi"]
-log_cli = true
-log_cli_level = "INFO"
+# This repo is a flat collection of packages (no src/ layout). List them
+# explicitly so editable installs resolve correctly and no phantom package is
+# referenced.
+[tool.setuptools]
+py-modules = ["cli"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "tests_asi*", "discovery*", "llm*", "models*", "reporting*", "config*", "payloads*"]
+
+# pytest configuration lives in pytest.ini (single source of truth).

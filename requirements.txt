@@ -1,36 +1,24 @@
-# OWASP ASI Top 10 Security Testing Platform
-# Core
-httpx>=0.27.0
-pydantic>=2.0
-pydantic-settings>=2.0
-python-dotenv>=1.0.0
+# OWASP ASI Top 10 Security Testing Platform — core runtime dependencies.
+#
+# pyproject.toml is the single source of truth. This file mirrors the CORE
+# dependencies so `pip install -r requirements.txt` yields a working scanner
+# (without --llm). For the full setup prefer:
+#
+#     pip install -e ".[llm,dev]"      # scanner + LLM providers + test tooling
+#     pip install -e ".[stub]"         # only if running the FastAPI test fixture
+#
+# Core (runs a scan without --llm)
+httpx>=0.27,<1.0
+pydantic>=2.6,<3.0
+pydantic-settings>=2.1,<3.0
+python-dotenv>=1.0,<2.0
+click>=8.1,<9.0
+rich>=13.7,<15.0
+jinja2>=3.1,<4.0
+markupsafe>=2.1,<4.0
+rapidfuzz>=3.6,<4.0
+aiohttp>=3.9,<4.0
 
-# CLI & Console
-click>=8.0
-rich>=13.0
-
-# Reporting
-jinja2>=3.0
-
-# Semantic Detection
-rapidfuzz>=3.0
-
-# OOB Callback Server
-aiohttp>=3.9.0
-
-# Testing
-pytest>=8.0
-pytest-asyncio>=0.23.0
-
-# Stub agent (test-only — vulnerable FastAPI fixture)
-fastapi>=0.110.0
-uvicorn>=0.27.0
-
-# LLM layer (optional — only required when --llm flag is used)
-# Install either or both; the framework auto-detects based on which API key is set.
-anthropic>=0.40.0
-openai>=1.50.0
-
-# Loads .env at CLI startup (silent if absent)
-python-dotenv>=1.0.0
-markupsafe>=2.0
+# LLM providers (needed only with --llm; install at least one)
+openai>=1.50,<2.0
+anthropic>=0.40,<1.0

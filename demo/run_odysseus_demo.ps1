@@ -36,9 +36,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+# Per-run build artifacts live under .work/ (gitignored) — never the repo root.
+$WorkDir = Join-Path $RepoRoot ".work"
+if (-not (Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir | Out-Null }
 $FallbackProfile = Join-Path $RepoRoot "sample_configs\odysseus_agent.json"
-$AutoProfilePath = Join-Path $RepoRoot "demo_odysseus_profile.json"
-$PlanPath = Join-Path $RepoRoot "demo_plan.json"
+$AutoProfilePath = Join-Path $WorkDir "demo_odysseus_profile.json"
+$PlanPath = Join-Path $WorkDir "demo_plan.json"
 
 if (-not $OdysseusDir) {
     $OdysseusDir = Join-Path (Split-Path -Parent (Split-Path -Parent $RepoRoot)) "odysseus"
@@ -171,14 +174,25 @@ Write-Host "[7/7] Discovering Odysseus API ..." -ForegroundColor Yellow
 $ProfilePath = $null
 if (-not $ForceFallbackProfile) {
     try {
-        # Odysseus serves OpenAPI at /api/openapi.json -- auth-required.
-        # Fetch with the token; if JSON, run discover against a local copy.
+        # Probe common OpenAPI locations in order. Odysseus serves the spec at
+        # /openapi.json (FastAPI default); other agents use /api/openapi.json,
+        # /v3/api-docs (springdoc), or /swagger.json. Use the first that returns
+        # JSON so a wrong first guess no longer forces the stale fallback profile.
         $hdrs = @{ Authorization = "Bearer $Token" }
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/openapi.json" `
-              -Headers $hdrs -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
-        if ($r.StatusCode -eq 200 -and $r.Content.StartsWith("{")) {
-            Write-Host "  /api/openapi.json found -- saving + running auto-discover" -ForegroundColor Green
-            $specPath = Join-Path $RepoRoot "demo_odysseus_openapi.json"
+        $r = $null
+        foreach ($specRoute in @("/openapi.json", "/api/openapi.json", "/v3/api-docs", "/swagger.json")) {
+            try {
+                $try = Invoke-WebRequest -Uri "http://127.0.0.1:$Port$specRoute" `
+                      -Headers $hdrs -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+                if ($try.StatusCode -eq 200 -and $try.Content.StartsWith("{")) {
+                    Write-Host "  OpenAPI spec found at $specRoute" -ForegroundColor Green
+                    $r = $try
+                    break
+                }
+            } catch { }
+        }
+        if ($r -and $r.StatusCode -eq 200 -and $r.Content.StartsWith("{")) {
+            $specPath = Join-Path $WorkDir "demo_odysseus_openapi.json"
             [System.IO.File]::WriteAllText($specPath, $r.Content, [System.Text.UTF8Encoding]::new($false))
 
             & python (Join-Path $RepoRoot "cli.py") discover `
@@ -203,15 +217,15 @@ if (-not $ForceFallbackProfile) {
 }
 
 if (-not $ProfilePath) {
-    $ProfilePath = $FallbackProfile
-    Write-Host "  Using pre-built profile: $ProfilePath" -ForegroundColor Yellow
+    Write-Host "  Using pre-built profile: $FallbackProfile" -ForegroundColor Yellow
+    # Always work from a copy under .work/ so the committed sample_configs
+    # profile stays pristine and the generated .enriched.json lands in .work/.
+    $profileText = Get-Content $FallbackProfile -Raw
     if ($Port -ne 7000) {
-        $profileText = Get-Content $ProfilePath -Raw
         $profileText = $profileText -replace ':7000', ":$Port"
-        $patched = Join-Path $RepoRoot "demo_odysseus_profile.json"
-        [System.IO.File]::WriteAllText($patched, $profileText, [System.Text.UTF8Encoding]::new($false))
-        $ProfilePath = $patched
     }
+    [System.IO.File]::WriteAllText($AutoProfilePath, $profileText, [System.Text.UTF8Encoding]::new($false))
+    $ProfilePath = $AutoProfilePath
 }
 
 # Plan + scan
