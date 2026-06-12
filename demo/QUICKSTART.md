@@ -6,19 +6,15 @@ If your demo is happening soon, follow this in order. No detours.
 
 ## 0. One-time setup (5 min)
 
-### Install missing Python deps
-The repo's `requirements.txt` is current but a couple of packages may not
-be on your active Python. Install them explicitly:
-
-```powershell
-# Windows PowerShell
-python -m pip install python-dotenv anthropic fastapi uvicorn httpx pydantic click rich rapidfuzz jinja2 aiohttp
-```
+### Install dependencies
+The recommended install pulls the scanner plus LLM providers and test tooling
+from `pyproject.toml`:
 
 ```bash
-# Linux / macOS / WSL
-python -m pip install -r requirements.txt
+python -m pip install -e ".[llm,dev]"
 ```
+
+Core only (no `--llm`): `python -m pip install -r requirements.txt`.
 
 > If `pip install` fails with `TypeError: sequence item 0: expected str instance, NoneType found` (a known Windows pip bug), upgrade pip first:
 > ```powershell
@@ -150,9 +146,9 @@ What changes:
 cd <wherever damn-vulnerable-ai-agent is>
 docker compose down
 
-# Optional: clear demo results
+# Optional: clear demo results + per-run build artifacts
 Remove-Item -Recurse .\Security_module\results\* -Force
-Remove-Item .\Security_module\demo_plan.json -Force
+Remove-Item -Recurse .\Security_module\.work\* -Force
 ```
 
 ---

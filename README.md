@@ -163,20 +163,24 @@ identifiers so the resulting `results/<run_id>/` folder is safe to share.
 ```bash
 git clone https://github.com/krishddd/security-module.git
 cd security-module
-pip install -r requirements.txt
-cp .env.example .env  # TARGET_URL, TARGET_TOKEN, etc.
 
-# Run the full ASI suite
-python cli.py run --profile demo_anythingllm_profile.json
+# Full setup: scanner + LLM providers (--llm) + test tooling
+pip install -e ".[llm,dev]"
+#   Core only (runs a scan without --llm):   pip install -r requirements.txt
+#   Test fixture (FastAPI stub agent):        pip install -e ".[stub]"
 
-# Or run a single suite
-pytest tests_asi/ext1_prompt_injection.py -v
+cp .env.example .env  # set OPENAI_API_KEY and target tokens
 
-# Demo flow (Odysseus sample agent)
-pwsh demo/run_odysseus_demo.ps1
+# Run the unit suite (153 tests)
+python -m pytest tests/ -q --ignore=tests/test_scan_v3_live.py
+
+# Demo flow against a live agent (discover → preflight → fingerprint → scan-v3)
+pwsh demo/run_anythingllm_demo.ps1   # AnythingLLM (Docker, :3001)
+pwsh demo/run_odysseus_demo.ps1      # Odysseus    (Docker, :7000)
 ```
 
-Open `results/<run_id>/report.html` when done.
+Reports are written to `results/<run_id>/report.html`; per-run build
+artifacts (profile, plan, OpenAPI spec) go to `.work/` (both gitignored).
 
 ---
 
