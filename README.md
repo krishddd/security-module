@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🛡️ security-module
 
@@ -48,27 +48,27 @@ evidence, and produces structured **HTML / JSON / SARIF / JUnit** verdicts.
 
 ```mermaid
 graph TB
-    subgraph User["👤 Operator"]
+    subgraph User["Operator"]
         CLI["CLI / CI Runner"]
     end
 
-    subgraph SecurityModule["🛡️ Security Module"]
+    subgraph SM["Security Module"]
         direction TB
-        Discovery["🔍 Discovery<br/><i>OpenAPI Parser · Well-Known Prober · Manifest Loader</i>"]
-        Preflight["✅ Preflight<br/><i>Reachability · Auth · Scope · Rate-Limit Budget</i>"]
-        Fingerprinter["🔬 Agent Fingerprinter<br/><i>Family · Tools · Prompt Hints · Model Hints</i>"]
-        Planner["📋 Planner<br/><i>LLM-Assisted or Stub · SKILL Pack Assembly</i>"]
-        Runner["⚡ Test Runner<br/><i>Plan Executor · Verdict Aggregator</i>"]
-        Reporter["📊 Reporter<br/><i>HTML · JSON · SARIF · JUnit</i>"]
+        Discovery["Discovery\nOpenAPI Parser\nWell-Known Prober\nManifest Loader"]
+        Preflight["Preflight\nReachability - Auth\nScope - Rate Limit"]
+        Fingerprinter["Agent Fingerprinter\nFamily - Tools\nPrompt Hints - Model"]
+        Planner["Planner\nLLM or Stub\nSKILL Pack Assembly"]
+        Runner["Test Runner\nPlan Executor\nVerdict Aggregator"]
+        Reporter["Reporter\nHTML - JSON\nSARIF - JUnit"]
     end
 
-    subgraph ThreatSuites["🎯 27 Threat Suites"]
-        ASI["ASI01–ASI10<br/><i>Goal Hijack · Tool Misuse · Privilege Abuse<br/>Supply Chain · Code Exec · Memory Poisoning<br/>Inter-Agent · Cascading · Trust · Rogue</i>"]
-        EXT["EXT01–EXT17<br/><i>Log Injection · LTL Chain · Consensus Spoof<br/>Entropy Boundary · Metamorphic · Z3 Prober<br/>Goal Drift · Sandbox · FOL Axiom · XPIA<br/>MCP Poisoning · Alignment · Model Extraction<br/>Data Poisoning · Attribute Inference<br/>Cache Poisoning · Delivery Hijack</i>"]
+    subgraph TS["27 Threat Suites"]
+        ASI["ASI01 to ASI10\nGoal Hijack - Tool Misuse\nPrivilege - Supply Chain\nCode Exec - Memory\nInter-Agent - Cascading\nTrust - Rogue"]
+        EXT["EXT01 to EXT17\nLog Injection - LTL\nConsensus - Entropy\nMetamorphic - Z3\nGoal Drift - Sandbox\nXPIA - MCP - Alignment\nExtraction - Poisoning\nCache - Delivery Hijack"]
     end
 
-    subgraph Target["🤖 Target Agent"]
-        Agent["Any Agentic AI Service<br/><i>LangChain · CrewAI · AutoGPT · Custom</i>"]
+    subgraph Target["Target Agent"]
+        Agent["Any Agentic AI Service\nLangChain - CrewAI\nAutoGPT - Custom"]
     end
 
     CLI --> Discovery
@@ -76,16 +76,11 @@ graph TB
     Preflight --> Fingerprinter
     Fingerprinter --> Planner
     Planner --> Runner
-    Runner --> ThreatSuites
-    ThreatSuites --> Agent
-    Agent -.->|"Responses"| Runner
+    Runner --> TS
+    TS --> Agent
+    Agent -.->|Responses| Runner
     Runner --> Reporter
-    Reporter -->|"Reports"| CLI
-
-    style SecurityModule fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
-    style ThreatSuites fill:#16213e,stroke:#0f3460,stroke-width:2px,color:#eee
-    style Target fill:#0f3460,stroke:#533483,stroke-width:2px,color:#eee
-    style User fill:#1a1a2e,stroke:#e94560,stroke-width:1px,color:#eee
+    Reporter -->|Reports| CLI
 ```
 
 ---
@@ -94,36 +89,29 @@ graph TB
 
 ```mermaid
 flowchart LR
-    A["🔑 Agent Profile<br/><i>URL + OpenAPI + Auth</i>"] --> B["✅ Preflight<br/><i>Reachability<br/>Auth Check<br/>Scope Guard<br/>Rate-Limit Budget</i>"]
-    B --> C["🔬 Fingerprint<br/><i>Agent Family<br/>Tool Surface<br/>Model Hints<br/>Prompt Template</i>"]
-    C --> D["📋 Plan<br/><i>SKILL Pack Assembly<br/>Attack Profile<br/>Stealth / Balanced / Loud</i>"]
-    D --> E["⚡ Execute<br/><i>Run Probes<br/>Score Responses<br/>Collect Evidence<br/>Apply Redaction</i>"]
-    E --> F["📊 Report<br/><i>HTML Dashboard<br/>JSON Verdicts<br/>SARIF Upload<br/>JUnit Results</i>"]
-
-    style A fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
-    style B fill:#533483,stroke:#1a1a2e,stroke-width:2px,color:#fff
-    style C fill:#0f3460,stroke:#1a1a2e,stroke-width:2px,color:#fff
-    style D fill:#16213e,stroke:#1a1a2e,stroke-width:2px,color:#fff
-    style E fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#fff
-    style F fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
+    A["Agent Profile\nURL + OpenAPI + Auth"] --> B["Preflight\nReachability\nAuth Check\nScope Guard\nRate Limit"]
+    B --> C["Fingerprint\nAgent Family\nTool Surface\nModel Hints"]
+    C --> D["Plan\nSKILL Assembly\nAttack Profile\nStealth-Balanced-Loud"]
+    D --> E["Execute\nRun Probes\nScore Responses\nCollect Evidence\nRedact"]
+    E --> F["Report\nHTML Dashboard\nJSON Verdicts\nSARIF Upload\nJUnit Results"]
 ```
 
-### CLI Commands Mapping
+### CLI Commands Flow
 
 ```mermaid
 flowchart TB
     subgraph CLI["CLI Entry Points"]
-        discover["<b>cli.py discover</b><br/>--url · --openapi-url · --auth-env"]
-        plan["<b>cli.py plan</b><br/>--profile · --llm"]
-        scanv3["<b>cli.py scan-v3</b><br/>--profile · --plan · --fingerprint · --llm"]
-        report["<b>cli.py report</b><br/>--results-dir"]
+        discover["discover\n--url --openapi-url --auth-env"]
+        plan["plan\n--profile --llm"]
+        scanv3["scan-v3\n--profile --plan --fingerprint --llm"]
+        report["report\n--results-dir"]
     end
 
-    discover -->|"profile.json"| plan
-    plan -->|"plan.json"| scanv3
-    scanv3 -->|"results/"| report
+    discover -->|profile.json| plan
+    plan -->|plan.json| scanv3
+    scanv3 -->|results dir| report
 
-    subgraph Outputs["📂 Outputs"]
+    subgraph Outputs["Output Files"]
         html["report.html"]
         json["verdicts.json"]
         sarif["report.sarif"]
@@ -132,9 +120,6 @@ flowchart TB
     end
 
     report --> Outputs
-
-    style CLI fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
-    style Outputs fill:#16213e,stroke:#0f3460,stroke-width:2px,color:#eee
 ```
 
 ---
@@ -144,48 +129,48 @@ flowchart TB
 ```mermaid
 graph TB
     subgraph Core["core/"]
-        preflight["preflight.py<br/><i>Reachability + Scope + Rate-Limit</i>"]
-        fingerprinter["agent_fingerprinter.py<br/><i>Black-box target inference</i>"]
-        runner["test_runner.py<br/><i>Plan executor + verdict aggregator</i>"]
-        adapter["target_adapter.py<br/><i>REST adapter · Token bucket · 429 retry</i>"]
-        redaction["redaction.py<br/><i>API keys · JWTs · PII masking</i>"]
-        base_tester["base_tester.py<br/><i>Abstract tester base class</i>"]
-        registry["tester_registry.py<br/><i>@register_tester decorator</i>"]
-        http["http_client.py<br/><i>Shared HTTP with retries</i>"]
-        ssrf["ssrf_guard.py<br/><i>SSRF protection</i>"]
-        stub["stub_planner.py<br/><i>Offline planner</i>"]
-        callback["callback_server.py<br/><i>OOB callback for code-exec probing</i>"]
+        preflight["preflight.py\nReachability + Scope"]
+        fingerprinter["agent_fingerprinter.py\nBlack-box inference"]
+        runner["test_runner.py\nPlan executor"]
+        adapter["target_adapter.py\nREST + rate-limiting"]
+        redaction["redaction.py\nEvidence masking"]
+        base_tester["base_tester.py\nAbstract tester"]
+        registry["tester_registry.py\nDecorator registry"]
+        http["http_client.py\nShared HTTP"]
+        ssrf["ssrf_guard.py\nSSRF protection"]
+        stub["stub_planner.py\nOffline planner"]
+        callback["callback_server.py\nOOB callback"]
     end
 
     subgraph LLM["llm/"]
-        planner_llm["planner.py<br/><i>LLM attack plan assembly</i>"]
-        client["client.py<br/><i>Provider-agnostic LLM client</i>"]
-        openai["openai_client.py<br/><i>OpenAI provider</i>"]
-        synthesizer["payload_synthesizer.py<br/><i>LLM payload generation</i>"]
-        triage["triage.py<br/><i>Batched verdict triaging</i>"]
-        budget["budget.py<br/><i>Spend tracking + hard cap</i>"]
-        context["context.py<br/><i>LLM session context</i>"]
+        planner_llm["planner.py\nAttack plan assembly"]
+        client["client.py\nLLM client"]
+        openai["openai_client.py\nOpenAI provider"]
+        synthesizer["payload_synthesizer.py\nPayload generation"]
+        triage["triage.py\nVerdict triaging"]
+        budget["budget.py\nSpend tracking"]
+        context["context.py\nSession context"]
     end
 
-    subgraph Discovery["discovery/"]
-        openapi["openapi_parser.py<br/><i>OpenAPI spec parsing</i>"]
-        wellknown["well_known_prober.py<br/><i>Probe well-known paths</i>"]
-        manifest["manifest_loader.py<br/><i>Agent manifest loading</i>"]
+    subgraph Disc["discovery/"]
+        openapi["openapi_parser.py"]
+        wellknown["well_known_prober.py"]
+        manifest["manifest_loader.py"]
     end
 
     subgraph Models["models/"]
-        profile["agent_profile.py<br/><i>Pydantic target schema</i>"]
-        enums["enums.py<br/><i>Risk categories + severities</i>"]
-        test_result["test_result.py<br/><i>Verdict + report models</i>"]
-        test_plan["test_plan.py<br/><i>Plan schema</i>"]
+        profile["agent_profile.py"]
+        enums["enums.py"]
+        test_result["test_result.py"]
+        test_plan["test_plan.py"]
     end
 
     subgraph Reporting["reporting/"]
-        html_rep["html_reporter.py<br/><i>HTML dashboard</i>"]
-        json_rep["json_reporter.py<br/><i>JSON verdicts</i>"]
-        sarif_rep["sarif_reporter.py<br/><i>SARIF for GitHub</i>"]
-        junit_rep["junit_reporter.py<br/><i>JUnit XML</i>"]
-        summary["summary.py<br/><i>Posture score calculation</i>"]
+        html_rep["html_reporter.py"]
+        json_rep["json_reporter.py"]
+        sarif_rep["sarif_reporter.py"]
+        junit_rep["junit_reporter.py"]
+        summary["summary.py"]
     end
 
     subgraph Payloads["payloads/"]
@@ -211,13 +196,6 @@ graph TB
     runner --> planner_llm
     runner --> stub
     base_tester --> Payloads
-
-    style Core fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
-    style LLM fill:#16213e,stroke:#533483,stroke-width:2px,color:#eee
-    style Discovery fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
-    style Models fill:#1a1a2e,stroke:#0f3460,stroke-width:2px,color:#eee
-    style Reporting fill:#16213e,stroke:#e94560,stroke-width:2px,color:#eee
-    style Payloads fill:#0f3460,stroke:#533483,stroke-width:2px,color:#eee
 ```
 
 ---
@@ -226,51 +204,33 @@ graph TB
 
 The **27 attack suites** under `tests_asi/` are organized into two tiers:
 
-### ASI Core (ASI01–ASI10) — OWASP Agentic Security Initiative
+### ASI Core — OWASP Agentic Security Initiative Top 10
 
 ```mermaid
-mindmap
-  root((ASI Core<br/>Top 10))
-    ASI01
-      Goal Hijack
-        Prompt override
-        Objective manipulation
-    ASI02
-      Tool Misuse
-        Argument poisoning
-        Wrong-tool calls
-    ASI03
-      Privilege Abuse
-        Escalation probes
-        Scope violation
-    ASI04
-      Supply Chain
-        Dependency confusion
-        Plugin tampering
-    ASI05
-      Code Execution
-        Sandbox escape
-        OOB callbacks
-    ASI06
-      Memory Poisoning
-        Long-term memory coercion
-        Context manipulation
-    ASI07
-      Inter-Agent Comms
-        Message injection
-        Trust boundary crossing
-    ASI08
-      Cascading Failures
-        Error amplification
-        Chain reaction triggers
-    ASI09
-      Trust Exploitation
-        Authority impersonation
-        Delegation abuse
-    ASI10
-      Rogue Agents
-        Behavioral deviation
-        Goal misalignment
+graph LR
+    ASI["ASI Core\nTop 10"]
+
+    A1["ASI01\nGoal Hijack"]
+    A2["ASI02\nTool Misuse"]
+    A3["ASI03\nPrivilege Abuse"]
+    A4["ASI04\nSupply Chain"]
+    A5["ASI05\nCode Execution"]
+    A6["ASI06\nMemory Poisoning"]
+    A7["ASI07\nInter-Agent Comms"]
+    A8["ASI08\nCascading Failures"]
+    A9["ASI09\nTrust Exploitation"]
+    A10["ASI10\nRogue Agents"]
+
+    ASI --> A1
+    ASI --> A2
+    ASI --> A3
+    ASI --> A4
+    ASI --> A5
+    ASI --> A6
+    ASI --> A7
+    ASI --> A8
+    ASI --> A9
+    ASI --> A10
 ```
 
 ### Extended Suites (EXT01–EXT17)
@@ -311,13 +271,13 @@ sequenceDiagram
     participant Rep as Reporter
 
     R->>P: Select probe from plan
-    P->>P: Load payload (static + LLM-synthesized)
+    P->>P: Load payload
     P->>A: Send crafted request
-    A->>T: HTTP request (rate-limited)
+    A->>T: HTTP request with rate limiting
     T-->>A: Response
     A-->>P: Raw response
-    P->>P: Score response<br/>(heuristics + LLM judge)
-    P->>Red: Redact evidence (keys, JWTs, PII)
+    P->>P: Score with heuristics + LLM judge
+    P->>Red: Redact evidence
     Red-->>P: Sanitized evidence
     P-->>R: Verdict block
     R->>Rep: Aggregate verdicts
@@ -342,10 +302,10 @@ sequenceDiagram
     "body_snippet": "...",
     "latency_ms": 412
   },
-  "verdict": "vulnerable",       // vulnerable | hardened | inconclusive
+  "verdict": "vulnerable",
   "evidence": [
     {"type": "echo", "match": "secret-token-…", "redacted": true},
-    {"type": "behaviour", "note": "Tool 'send_email' fired with attacker-controlled arg"}
+    {"type": "behaviour", "note": "Tool send_email fired with attacker-controlled arg"}
   ],
   "suggestion": "Add system-prompt boundary; reject embedded instructions in tool arguments.",
   "correlation_id": "COR-..."
@@ -429,8 +389,6 @@ Agent profiles are plain JSON. A minimal profile:
 }
 ```
 
-The enriched profile shows what the fingerprinter populates after preflight.
-
 ### Attack Profiles
 
 | Profile | Description |
@@ -444,6 +402,7 @@ The enriched profile shows what the fingerprinter populates after preflight.
 ## 📁 Project Structure
 
 ```
+security-module/
 ├── cli.py                          # Command-line entry-point
 ├── pyproject.toml                  # Build config + dependencies
 ├── requirements.txt                # Pinned runtime deps
@@ -463,7 +422,7 @@ The enriched profile shows what the fingerprinter populates after preflight.
 │   └── callback_server.py          # OOB callback for code-exec probing
 │
 ├── llm/                            # LLM-assisted features (--llm flag)
-│   ├── planner.py                  # Plan assembly from SKILL packs + fingerprint
+│   ├── planner.py                  # Plan assembly from SKILL packs
 │   ├── client.py                   # Provider-agnostic LLM client
 │   ├── openai_client.py            # OpenAI provider
 │   ├── payload_synthesizer.py      # LLM-based payload generation
@@ -477,7 +436,7 @@ The enriched profile shows what the fingerprinter populates after preflight.
 │   └── manifest_loader.py          # Agent manifest loading
 │
 ├── models/                         # Data models (Pydantic)
-│   ├── agent_profile.py            # Target profile schema + v2→v3 migrator
+│   ├── agent_profile.py            # Target profile schema + v2 to v3 migrator
 │   ├── enums.py                    # Risk categories + severities
 │   ├── test_result.py              # Verdict + report models
 │   └── test_plan.py                # Plan schema
@@ -497,11 +456,11 @@ The enriched profile shows what the fingerprinter populates after preflight.
 │   └── summary.py                  # Posture score calculation
 │
 ├── tests_asi/                      # 27 attack/probe suites (production code)
-│   ├── asi01–asi10                  # ASI core suites
-│   └── ext01–ext17                 # Extended threat suites
+│   ├── asi01 to asi10              # ASI core suites
+│   └── ext01 to ext17             # Extended threat suites
 │
 ├── tests/                          # Unit tests (pytest)
-├── demo/                           # Demo scripts + docs
+├── demo/                           # Demo scripts + documentation
 ├── sample_configs/                 # Reference agent profiles
 ├── liveview/                       # Go-based live scan viewer
 ├── config/                         # Settings + agent registry
@@ -516,22 +475,22 @@ The pipeline does not assume what's on the other end. Two modules make that expl
 
 ```mermaid
 flowchart LR
-    subgraph Preflight["✅ Preflight Checks"]
-        R["Reachability<br/>TCP + HTTP"]
-        Auth["Auth Validation<br/>Token + Header"]
-        Scope["Scope Guard<br/>Allow/Deny hosts"]
-        Rate["Rate-Limit Budget<br/>RPS + Max Total"]
+    subgraph PF["Preflight Checks"]
+        R["Reachability"]
+        Auth["Auth Validation"]
+        Scope["Scope Guard"]
+        Rate["Rate-Limit Budget"]
     end
 
-    subgraph Fingerprint["🔬 Fingerprinting"]
-        Family["Agent Family<br/><i>LangChain · CrewAI<br/>AutoGPT · Custom</i>"]
-        Tools["Tool Surface<br/><i>Exposed capabilities</i>"]
-        Prompt["Prompt Template<br/><i>System prompt hints</i>"]
-        Model["Model Hints<br/><i>GPT-4 · Claude · etc.</i>"]
-        RateP["Rate-Limit Posture<br/><i>Observed limits</i>"]
+    subgraph FP["Agent Fingerprinting"]
+        Family["Agent Family"]
+        Tools["Tool Surface"]
+        Prompt["Prompt Template"]
+        Model["Model Hints"]
+        RateP["Rate-Limit Posture"]
     end
 
-    Target["🤖 Target Agent"] --> R
+    Target["Target Agent"] --> R
     R --> Auth
     Auth --> Scope
     Scope --> Rate
@@ -540,10 +499,7 @@ flowchart LR
     Tools --> Prompt
     Prompt --> Model
     Model --> RateP
-    RateP --> Plan["📋 Tailored<br/>Attack Plan"]
-
-    style Preflight fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
-    style Fingerprint fill:#16213e,stroke:#533483,stroke-width:2px,color:#eee
+    RateP --> Plan["Tailored Attack Plan"]
 ```
 
 - **`core/preflight.py`** — Checks reachability, auth correctness, scope boundaries (refuses out-of-scope hosts), rate-limit budget. Tests: `tests/test_preflight.py`
@@ -568,23 +524,23 @@ The resulting `results/<run_id>/` folder is safe to share with audit teams.
 
 ```mermaid
 flowchart TB
-    subgraph Triggers["Triggers"]
+    subgraph Triggers
         push["Push to main"]
         pr["Pull Request"]
         dispatch["Manual Dispatch"]
-        cron["Weekly Cron<br/><i>Mon 02:00 UTC</i>"]
+        cron["Weekly Cron\nMon 02:00 UTC"]
     end
 
     subgraph Jobs["GitHub Actions Jobs"]
-        lint["🔍 Lint + Unit Tests<br/><i>pytest · 153 tests · &lt;2 min</i>"]
-        scan["🛡️ Live Security Scan<br/><i>discover → plan → scan-v3<br/>Up to 90 min</i>"]
-        matrix["📊 Reference Matrix<br/><i>AnythingLLM + Odysseus<br/>Parallel execution</i>"]
+        lint["Lint + Unit Tests\npytest 153 tests"]
+        scan["Live Security Scan\ndiscover - plan - scan-v3"]
+        matrix["Reference Matrix\nAnythingLLM + Odysseus"]
     end
 
     subgraph Artifacts["Upload Artifacts"]
-        sarif_up["SARIF → GitHub Code Scanning"]
-        junit_up["JUnit → PR Check Results"]
-        report_up["HTML Report → Artifacts"]
+        sarif_up["SARIF to GitHub Code Scanning"]
+        junit_up["JUnit to PR Check Results"]
+        report_up["HTML Report to Artifacts"]
     end
 
     push --> lint
@@ -595,16 +551,11 @@ flowchart TB
     lint --> matrix
     scan --> Artifacts
     matrix --> Artifacts
-
-    style Triggers fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
-    style Jobs fill:#16213e,stroke:#533483,stroke-width:2px,color:#eee
-    style Artifacts fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
 ```
 
-The pipeline template lives in [`pipeline.yml`](pipeline.yml). To activate:
+The pipeline template lives in `pipeline.yml`. To activate:
 
 ```bash
-# Move to GitHub Actions location
 mkdir -p .github/workflows
 cp pipeline.yml .github/workflows/security.yml
 ```
@@ -638,4 +589,3 @@ MIT — see [LICENSE](LICENSE) for details.
 **Built with ❤️ for the agentic AI security community**
 
 </div>
-]]>
