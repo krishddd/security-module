@@ -22,7 +22,8 @@ discovers everything automatically.
 | Auth | `auth_headers` dict (token inline in JSON) | `AuthConfig` with `token_env_var` only — never inline; auto-registered with Redactor |
 | Test registry | `_MODULE_MAP` in `test_runner.py` | `@register_tester` decorator with `required_capabilities`, `applicable_transports`, `requires_clean_state`, `multi_turn`, `seed_payload_module` metadata |
 | Runner | `run_all(config)` | `run_with_profile(profile, plan, adapter, llm_context)` with full capability + transport gating, `SessionHandle` lifecycle, budget short-circuiting |
-| Transport | Always HTTP, fixed POST shape | `TargetAdapter` ABC + `RestAgentAdapter` (rate-limit token-bucket, 429 retry, session reset). GraphQL/MCP stubs ready for v2.1 |
+| Transport | Always HTTP, fixed POST shape | `TargetAdapter` ABC + `RestAgentAdapter`, `SseAgentAdapter` (streamed chat completions), `WebSocketAgentAdapter` (streamed frames) — all rate-limit token-bucket + 429 retry + session reset; streaming adapters aggregate chunks into one response. GraphQL/MCP stubs ready for v2.1 |
+| Multi-turn | Single-shot probes only | `ConversationSession` (`core/conversation.py`) threads goal-drift / memory-poisoning / trust-exploitation / alignment chains through one session (cookie/token continuity + `messages` replay) |
 | LLM | Not used | Optional planner + payload synthesizer (with quality gate) + batched triager, all behind `--llm` |
 | Reports | Same SARIF/JUnit/HTML/JSON | Unchanged — the reporting layer was preserved verbatim |
 

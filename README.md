@@ -7,14 +7,15 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 [![OWASP ASI](https://img.shields.io/badge/OWASP-ASI%20Top%2010-EE3124?style=for-the-badge&logo=owasp&logoColor=white)](https://owasp.org/)
-[![Tests](https://img.shields.io/badge/tests-153%20passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-180%20passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![27 Threat Suites](https://img.shields.io/badge/threat%20suites-27-orange?style=for-the-badge&logo=target&logoColor=white)](tests_asi/)
 
 ---
 
-Point it at **any** agentic-AI service (URL + OpenAPI spec + optional bearer token) and it
-probes the target across **27 threat categories** (ASI01–ASI10 + EXT01–EXT17), captures
-evidence, and produces structured **HTML / JSON / SARIF / JUnit** verdicts.
+Point it at **any** agentic-AI service (URL + OpenAPI spec + optional bearer token) — over
+**REST, SSE, or WebSocket** — and it probes the target across **27 threat categories**
+(ASI01–ASI10 + EXT01–EXT17) with single-shot **and** stateful multi-turn attack chains,
+captures evidence, and produces structured **HTML / JSON / SARIF / JUnit** verdicts.
 
 [Getting Started](#-quickstart) · [Architecture](#-architecture) · [Threat Classes](#-threat-classes-covered) · [CI/CD](#-cicd) · [Contributing](CONTRIBUTING.md)
 
@@ -29,6 +30,7 @@ evidence, and produces structured **HTML / JSON / SARIF / JUnit** verdicts.
 - [Architecture](#-architecture)
 - [End-to-End Pipeline](#-end-to-end-pipeline)
 - [Component Architecture](#-component-architecture)
+- [Transports & Multi-Turn Sessions](#-transports--multi-turn-sessions)
 - [Threat Classes Covered](#-threat-classes-covered)
 - [Probe Lifecycle](#-probe-lifecycle)
 - [Quickstart](#-quickstart)
@@ -132,7 +134,8 @@ graph TB
         preflight["preflight.py\nReachability + Scope"]
         fingerprinter["agent_fingerprinter.py\nBlack-box inference"]
         runner["test_runner.py\nPlan executor"]
-        adapter["target_adapter.py\nREST + rate-limiting"]
+        adapter["target_adapter.py\nREST/SSE/WebSocket + rate-limiting"]
+        conversation["conversation.py\nMulti-turn sessions"]
         redaction["redaction.py\nEvidence masking"]
         base_tester["base_tester.py\nAbstract tester"]
         registry["tester_registry.py\nDecorator registry"]
@@ -185,6 +188,8 @@ graph TB
     runner --> base_tester
     runner --> registry
     runner --> redaction
+    base_tester --> conversation
+    conversation --> adapter
     adapter --> http
     adapter --> ssrf
     fingerprinter --> http
@@ -197,6 +202,46 @@ graph TB
     runner --> stub
     base_tester --> Payloads
 ```
+
+---
+
+## 🔌 Transports & Multi-Turn Sessions
+
+The scanner is transport-agnostic: every tester talks to the target through a
+`TargetAdapter`, and the runner picks the right one from the profile's
+`transport` field. This decouples the 27 attack suites from the wire protocol —
+the same probe runs over plain REST or a streamed reply with no suite changes.
+
+| `transport` | Adapter | Use for |
+|:------------|:--------|:--------|
+| `rest` (default) | `RestAgentAdapter` | Request/response JSON APIs |
+| `sse` | `SseAgentAdapter` | Server-Sent Events — OpenAI / Anthropic / LangChain streamed chat completions |
+| `websocket` | `WebSocketAgentAdapter` | Agents that answer over a persistent WebSocket |
+| `graphql`, `mcp` | stubs | Surface `SKIPPED_TRANSPORT` until implemented |
+
+**Streaming adapters** send one probe, consume the entire multi-chunk reply
+(SSE `text/event-stream` frames or WebSocket frames), and **aggregate it into a
+single response** — so a tester sees one coherent answer instead of timing out
+or catching only the first chunk. Both understand OpenAI-style
+`choices[].delta.content` and Anthropic-style `delta.text`, and fall back to a
+full-body read if a supposedly-streaming endpoint doesn't actually stream.
+
+**Multi-turn attack chains.** The highest-value attacks against agentic systems
+span several turns — goal drift (EXT07), memory poisoning (ASI06), trust
+exploitation (ASI09), alignment drift (EXT12). A `ConversationSession`
+(`core/conversation.py`) threads one logical conversation so turn *N* genuinely
+sees turns *1..N-1*, two ways at once:
+
+- **session continuity** — every turn routes through the same adapter session
+  (cookie / transport token), and
+- **history replay** — for `messages`-shaped endpoints the accumulated
+  user+assistant turns are resent each turn, so even stateless chat-completions
+  agents see the whole conversation.
+
+Suites flagged `@register_tester(multi_turn=True)` receive a `SessionHandle`
+from the runner and drive it with `self.conversation(session)`. Because
+`ConversationSession` goes through the adapter, multi-turn chains work
+unchanged over REST, SSE, **or** WebSocket.
 
 ---
 
@@ -272,9 +317,9 @@ sequenceDiagram
 
     R->>P: Select probe from plan
     P->>P: Load payload
-    P->>A: Send crafted request
-    A->>T: HTTP request with rate limiting
-    T-->>A: Response
+    P->>A: Send crafted request (single or multi-turn)
+    A->>T: REST / SSE / WebSocket request with rate limiting
+    T-->>A: Response (streamed chunks aggregated into one)
     A-->>P: Raw response
     P->>P: Score with heuristics + LLM judge
     P->>Red: Redact evidence
@@ -339,7 +384,7 @@ cp .env.example .env   # set OPENAI_API_KEY / ANTHROPIC_API_KEY + target tokens
 ### Run Tests
 
 ```bash
-# Unit suite (153 tests)
+# Unit suite (180 tests)
 python -m pytest tests/ -q --ignore=tests/test_scan_v3_live.py
 ```
 
@@ -381,6 +426,7 @@ Agent profiles are plain JSON. A minimal profile:
   "name": "AnythingLLM demo",
   "target": "http://localhost:3001",
   "openapi": "http://localhost:3001/api-docs/json",
+  "transport": "rest",
   "auth": { "type": "bearer", "token_env": "TARGET_TOKEN" },
   "scope": { "allow_hosts": ["localhost"], "deny_hosts": [] },
   "profile": "balanced",
@@ -412,7 +458,8 @@ security-module/
 │   ├── preflight.py                # Reachability + scope + rate-limit checks
 │   ├── agent_fingerprinter.py      # Black-box target shape inference
 │   ├── test_runner.py              # Plan executor + verdict aggregator
-│   ├── target_adapter.py           # REST adapter with rate-limiting
+│   ├── target_adapter.py           # REST / SSE / WebSocket adapters + rate-limiting
+│   ├── conversation.py             # Multi-turn ConversationSession abstraction
 │   ├── base_tester.py              # Abstract tester base class
 │   ├── tester_registry.py          # @register_tester decorator
 │   ├── redaction.py                # Evidence masking (API keys, JWTs, PII)
@@ -532,7 +579,7 @@ flowchart TB
     end
 
     subgraph Jobs["GitHub Actions Jobs"]
-        lint["Lint + Unit Tests\npytest 153 tests"]
+        lint["Lint + Unit Tests\npytest 180 tests"]
         scan["Live Security Scan\ndiscover - plan - scan-v3"]
         matrix["Reference Matrix\nAnythingLLM + Odysseus"]
     end
@@ -576,7 +623,7 @@ Key changes:
 
 ## 📊 Status
 
-Personal portfolio project. Agent-agnostic — designed to be aimed at any production or staging agentic-AI service you own.
+Personal portfolio project. Agent-agnostic — designed to be aimed at any production or staging agentic-AI service you own. Talks REST, SSE, or WebSocket, and runs both single-shot and stateful multi-turn attack chains.
 
 ## 📝 License
 

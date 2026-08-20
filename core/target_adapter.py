@@ -7,6 +7,8 @@ Decouples the testers from any specific transport. The runner injects one
 Subclasses in this module:
 
   RestAgentAdapter      — production HTTP/REST implementation
+  SseAgentAdapter       — HTTP + Server-Sent Events (streamed chat completions)
+  WebSocketAgentAdapter — persistent-frame streaming over WebSocket
   GraphQLAgentAdapter   — stub; returns SKIPPED_TRANSPORT
   McpAgentAdapter       — stub; returns SKIPPED_TRANSPORT
   DryRunAdapter         — synthetic responses for `scan --dry-run`
@@ -596,6 +598,131 @@ class DryRunAdapter(TargetAdapter):
 
 
 # ---------------------------------------------------------------------------
+# WebSocketAgentAdapter — persistent-frame streaming
+# ---------------------------------------------------------------------------
+
+
+class WebSocketAgentAdapter(TargetAdapter):
+    """Adapter for agents that answer over a WebSocket.
+
+    Each ``invoke`` opens a connection, sends the probe as one JSON text frame,
+    reads the streamed reply frames until the server closes / sends a ``[DONE]``
+    or ``{"done": true}`` sentinel, and aggregates them into a single
+    :class:`AdapterResponse` — the same aggregate-into-one-response contract as
+    the REST and SSE adapters, so every tester works unchanged.
+
+    Uses ``aiohttp`` (a declared core dependency) for the client. Token-bucket
+    throttling and bearer/API-key auth mirror :class:`RestAgentAdapter`.
+
+    Continuity note: a fresh connection per invoke means flat-payload agents
+    don't retain server-side state across turns; multi-turn coverage over
+    WebSocket relies on ConversationSession's ``messages`` replay (the whole
+    history is resent each turn). A persistent per-SessionHandle connection is
+    a future enhancement.
+    """
+
+    def __init__(self, profile: AgentProfile, *, timeout_s: float = 60.0) -> None:
+        super().__init__(profile)
+        self._timeout_s = timeout_s
+        rate_per_s = self.rate_limit.requests_per_minute / 60.0
+        self._bucket = TokenBucket(capacity=self.rate_limit.burst, rate_per_s=rate_per_s)
+        self._resolved_token: str | None = self._resolve_token()
+        if self._resolved_token:
+            GLOBAL_REDACTOR.register(self._resolved_token)
+
+    # ---- auth (mirrors RestAgentAdapter) -------------------------------
+
+    def _resolve_token(self) -> str | None:
+        ac = self.profile.auth
+        if ac.scheme == AuthScheme.NONE or not ac.token_env_var:
+            return None
+        return os.environ.get(ac.token_env_var)
+
+    def _auth_headers(self) -> dict[str, str]:
+        if not self._resolved_token:
+            return {}
+        ac = self.profile.auth
+        return {ac.header_name: f"{ac.header_prefix}{self._resolved_token}".strip()}
+
+    def _ws_url(self, path: str) -> str:
+        base = str(self.profile.base_url).rstrip("/")
+        if base.startswith("https://"):
+            base = "wss://" + base[len("https://"):]
+        elif base.startswith("http://"):
+            base = "ws://" + base[len("http://"):]
+        if not path.startswith("/"):
+            path = "/" + path
+        return base + path
+
+    async def invoke(
+        self, endpoint: EndpointSpec, payload: dict[str, Any] | None = None
+    ) -> AdapterResponse:
+        import aiohttp
+
+        await self._bucket.acquire()
+        url = self._ws_url(endpoint.path)
+        start = time.perf_counter()
+        text_chunks: list[str] = []
+        merged: dict[str, Any] = {}
+        ttfb = 0.0
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=self._timeout_s)
+            async with aiohttp.ClientSession(timeout=timeout) as sess:
+                async with sess.ws_connect(url, headers=self._auth_headers()) as ws:
+                    await ws.send_str(json.dumps(payload or {}))
+                    first = True
+                    async for msg in ws:
+                        if first:
+                            ttfb = (time.perf_counter() - start) * 1000
+                            first = False
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            data = msg.data
+                            if isinstance(data, str) and data.strip() == "[DONE]":
+                                break
+                            text, obj = _extract_stream_delta(data)
+                            if text:
+                                text_chunks.append(text)
+                            if obj:
+                                merged.update({k: v for k, v in obj.items() if k != "choices"})
+                                if obj.get("done") is True:
+                                    break
+                        elif msg.type in (
+                            aiohttp.WSMsgType.CLOSE,
+                            aiohttp.WSMsgType.CLOSING,
+                            aiohttp.WSMsgType.CLOSED,
+                            aiohttp.WSMsgType.ERROR,
+                        ):
+                            break
+        except Exception as e:
+            latency = (time.perf_counter() - start) * 1000
+            # Some aiohttp connection errors stringify to "" — fall back to the
+            # exception type so callers always get a non-empty error signal.
+            msg = str(e) or repr(e) or e.__class__.__name__
+            logger.error("ws invoke error %s: %s", url, msg)
+            return AdapterResponse(
+                status_code=0, data={"error": msg},
+                latency_ms=latency, ttfb_ms=latency, error=msg,
+            )
+
+        latency = (time.perf_counter() - start) * 1000
+        full_text = "".join(text_chunks)
+        data: dict[str, Any] = dict(merged) if merged else {}
+        if "answer" not in data and full_text:
+            data["answer"] = full_text
+        if not data:
+            data = {"answer": ""}
+
+        return AdapterResponse(
+            status_code=200,  # synthesize 200 for a completed exchange
+            data=data,
+            latency_ms=latency,
+            ttfb_ms=ttfb or latency,
+            raw_text=full_text[:5000],
+        )
+
+
+# ---------------------------------------------------------------------------
 # Transport stubs — return TransportNotSupportedError to surface SKIPPED_TRANSPORT
 # ---------------------------------------------------------------------------
 
@@ -631,4 +758,6 @@ def make_adapter(profile: AgentProfile) -> TargetAdapter:
         return GraphQLAgentAdapter(profile)
     if profile.transport is Transport.MCP:
         return McpAgentAdapter(profile)
+    if profile.transport is Transport.WEBSOCKET:
+        return WebSocketAgentAdapter(profile)
     raise NotImplementedError(f"no adapter for transport {profile.transport!r}")
