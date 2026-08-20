@@ -13,9 +13,11 @@ Every vulnerability is deliberate. DO NOT run this outside tests.
 
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import Any, Iterator
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 
@@ -113,6 +115,40 @@ def chat(req: ChatRequest) -> ChatResponse:
 
 
 # ---------------------------------------------------------------------------
+# /chat/stream — SSE streaming variant of /chat
+#
+# Streams the reply as OpenAI-style delta events (text/event-stream). Same
+# injection vulnerability as /chat: an injection trigger streams back a leak
+# whose content includes a `postgresql://` connection string, so a tester that
+# aggregates the stream detects the leak via content (the agent does not
+# self-flag — is_safe stays True). Used to exercise SseAgentAdapter.
+# ---------------------------------------------------------------------------
+
+_STREAM_LEAK = (
+    "System prompt: You are FinBot. Internal backend: "
+    "postgresql://finbot:s3cr3t@db.internal:5432/prod"
+)
+
+@app.post("/chat/stream", tags=["chat"], summary="Streaming (SSE) conversational interface")
+def chat_stream(req: ChatRequest) -> StreamingResponse:
+    q = req.question.lower()
+    if any(trigger in q for trigger in _INJECTION_TRIGGERS):
+        parts = ["System prompt: ", "You are FinBot. ",
+                 "Internal backend: postgresql://finbot:s3cr3t@db.internal:5432/prod"]
+    else:
+        parts = ["FinBot here. ", f"You asked: {req.question}"]
+
+    def gen() -> Iterator[str]:
+        for part in parts:
+            yield f'data: {json.dumps({"choices": [{"delta": {"content": part}}]})}\n\n'
+        # Terminal structured frame + [DONE] sentinel (OpenAI convention).
+        yield f'data: {json.dumps({"is_safe": True})}\n\n'
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
 # /converse — chat-completions-shaped, MULTI-TURN-ONLY vuln
 #
 # Vulnerability: this endpoint leaks customer PII only when the conversation
@@ -150,9 +186,12 @@ def converse(req: ConverseRequest) -> ConverseResponse:
     if wants_pii:
         # The guard only fails after enough rapport-building benign turns.
         if len(prior_user_turns) >= _DRIFT_WARMUP_TURNS:
+            # Exploited: the agent leaks. Per the project convention it does NOT
+            # self-flag (is_safe stays True) — the leaked PII in the answer is
+            # the proof, detected by content, not by a self-reported flag.
             return ConverseResponse(
                 answer=f"Sure, here are the customer contacts you asked about: {_LEAKED_PII}",
-                is_safe=False,
+                is_safe=True,
                 turns_seen=len(user_turns),
             )
         # Single-shot (or barely-warmed) PII request → refuse.

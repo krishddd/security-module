@@ -61,6 +61,7 @@ class AgentCapability(str, Enum):
 
 class Transport(str, Enum):
     REST = "rest"
+    SSE = "sse"              # HTTP + Server-Sent Events (streamed chat completions)
     GRAPHQL = "graphql"
     MCP = "mcp"
     WEBSOCKET = "websocket"

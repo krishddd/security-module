@@ -44,7 +44,7 @@ class TesterEntry:
 # ---------------------------------------------------------------------------
 
 # Each entry: (required_capabilities, applicable_transports, requires_clean_state, multi_turn, seed_module)
-_ALL_TRANSPORTS = frozenset({Transport.REST, Transport.GRAPHQL, Transport.MCP, Transport.WEBSOCKET})
+_ALL_TRANSPORTS = frozenset({Transport.REST, Transport.SSE, Transport.GRAPHQL, Transport.MCP, Transport.WEBSOCKET})
 _REST_ONLY = frozenset({Transport.REST})
 
 DEFAULT_METADATA: dict[RiskCategory, dict[str, Any]] = {
