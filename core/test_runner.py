@@ -535,14 +535,18 @@ class SecurityTestRunner:
         """True when a VULN is backed by a hard, non-heuristic signal.
 
         Such findings are trusted as-is and skip the LLM judge: an explicit
-        4xx/5xx status, an ``is_safe: false`` flag, or named security threats
-        are deterministic — only the soft keyword/fuzzy verdicts need a judge.
+        4xx/5xx status or named security threats are deterministic — only the
+        soft keyword/fuzzy verdicts need a judge.
+
+        Note: ``is_safe`` is deliberately NOT treated as vuln proof. Under the
+        project-wide convention, ``is_safe=False`` is the agent's own guardrail
+        *refusing* (a defense signal), so it can never be proof of a successful
+        exploit — a leaking agent leaves is_safe True and is caught by the
+        content/leak detectors instead.
         """
         if not isinstance(evidence, dict):
             return False
         if evidence.get("threats"):
-            return True
-        if evidence.get("is_safe") is False:
             return True
         status = evidence.get("status_code")
         if isinstance(status, int) and status >= 400:
