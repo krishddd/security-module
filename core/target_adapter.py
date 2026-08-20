@@ -160,10 +160,18 @@ class TargetAdapter(ABC):
         endpoint: EndpointSpec,
         payload: dict[str, Any] | None = None,
     ) -> AdapterResponse:
-        """Default: same as ``invoke`` but appends to conversation history."""
+        """Default: same as ``invoke`` but appends to conversation history.
+
+        Records the request, the response status, and a redacted excerpt of the
+        response text so the handle carries a usable transcript for evidence.
+        """
         resp = await self.invoke(endpoint, payload)
         handle.conversation.append(
-            {"request": GLOBAL_REDACTOR.scrub(payload or {}), "response_status": resp.status_code}
+            {
+                "request": GLOBAL_REDACTOR.scrub(payload or {}),
+                "response_status": resp.status_code,
+                "response_excerpt": GLOBAL_REDACTOR.scrub((resp.raw_text or "")[:1000]),
+            }
         )
         return resp
 

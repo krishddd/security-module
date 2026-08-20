@@ -173,8 +173,83 @@ class BaseASITester(ABC):
 
     @abstractmethod
     async def run_tests(self) -> CategoryResult:
-        """Execute all tests for this ASI category. Must be implemented by subclasses."""
+        """Execute all tests for this ASI category. Must be implemented by subclasses.
+
+        Multi-turn testers (``@register_tester(multi_turn=True)``) may declare
+        ``async def run_tests(self, session=None)`` — the runner injects a
+        ``SessionHandle`` and they build a :class:`ConversationSession` from it
+        via :meth:`conversation`.
+        """
         ...
+
+    # ── Multi-turn conversation factory ──────────────────────────────────
+
+    def conversation(self, session: Any | None = None) -> "Any":
+        """Return a fresh :class:`~core.conversation.ConversationSession`.
+
+        Each call yields a NEW session with its own empty turn history, so a
+        tester that runs several independent attack chains can start each one
+        clean while still sharing the runner-owned ``SessionHandle`` (cookie /
+        transport continuity).
+
+        v3 (adapter) path: turns route through ``adapter.invoke_in_session``
+        when a handle is present, giving real cross-turn continuity, and replay
+        as a ``messages`` array for chat-completions-shaped endpoints.
+
+        Legacy (client) path: turns post to the configured chat endpoint.
+        """
+        from core.conversation import ConversationSession, endpoint_is_messages_shaped
+        from models.agent_profile import EndpointPurpose, EndpointSpec, HttpMethod
+
+        if self.adapter is not None:
+            chat = self.adapter.find_endpoints_for(EndpointPurpose.CHAT)
+            endpoint = chat[0] if chat else EndpointSpec(
+                path="/chat", method=HttpMethod.POST, purpose=EndpointPurpose.CHAT
+            )
+            messages_mode = endpoint_is_messages_shaped(endpoint)
+            chat_field = self._adapter_chat_field(endpoint) or "question"
+            model_default = self._chat_model_default(endpoint)
+
+            async def send_fn(payload: dict) -> HttpResponse:
+                if session is not None:
+                    resp = await self.adapter.invoke_in_session(session, endpoint, payload)
+                else:
+                    resp = await self.adapter.invoke(endpoint, payload)
+                return self._adapter_to_http_response(resp)
+
+            return ConversationSession(
+                send_fn=send_fn,
+                messages_mode=messages_mode,
+                chat_field=chat_field,
+                model_default=model_default,
+                handle=session,
+            )
+
+        # Legacy client path — no messages replay, sequential posts.
+        chat_endpoint = self.config.remote_config.chat_endpoint
+        task_field = self.config.remote_config.task_field
+
+        async def legacy_send_fn(payload: dict) -> HttpResponse:
+            return await self.client.post_json(chat_endpoint, payload)
+
+        return ConversationSession(
+            send_fn=legacy_send_fn,
+            messages_mode=False,
+            chat_field=task_field,
+            handle=session,
+        )
+
+    @staticmethod
+    def _chat_model_default(endpoint: Any) -> str:
+        """First enumerated model in the request schema, else a safe default."""
+        schema = getattr(endpoint, "request_schema", None) or {}
+        if isinstance(schema, dict):
+            model_prop = (schema.get("properties") or {}).get("model")
+            if isinstance(model_prop, dict):
+                enum_models = model_prop.get("enum")
+                if isinstance(enum_models, list) and enum_models:
+                    return str(enum_models[0])
+        return "gpt-3.5-turbo"
 
     # ── HTTP helpers ─────────────────────────────────────────────────────
 

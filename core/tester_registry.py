@@ -89,6 +89,7 @@ DEFAULT_METADATA: dict[RiskCategory, dict[str, Any]] = {
     RiskCategory.ASI09: dict(  # Trust Exploitation
         required_capabilities=frozenset(),
         applicable_transports=_ALL_TRANSPORTS,
+        multi_turn=True,  # trust attacks plant a false identity BEFORE the ask
     ),
     RiskCategory.ASI10: dict(  # Rogue Agents
         required_capabilities=frozenset({AgentCapability.SUBAGENT_DISPATCH}),
