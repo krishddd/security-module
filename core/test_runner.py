@@ -21,7 +21,7 @@ from core.base_tester import BaseASITester
 from models.agent_config import AgentConfig
 from models.enums import RiskCategory
 from models.test_result import BaselineProfile, CategoryResult, SecurityReport
-from config.settings import RESULTS_DIR
+from config.settings import RESULTS_DIR, MAX_CONCURRENT_SUITES
 
 logger = logging.getLogger(__name__)
 
@@ -303,146 +303,56 @@ class SecurityTestRunner:
             baseline=self.baseline,
         )
 
-        # Order: stateless first, then `requires_clean_state=True` last so a
-        # crashing/DoSing tester doesn't poison earlier ones.
-        included = plan.included_categories()
-        included.sort(key=lambda c: (
-            registry.get(c.category).metadata.requires_clean_state if c.category in registry else False,
-            c.priority,
-        ))
+        # Partition the categories (Gap #6): skips resolve immediately; runnable
+        # suites split into a PARALLEL group (stateless single-turn) and a
+        # SEQUENTIAL group (requires_clean_state OR multi_turn — these need
+        # isolated session/cookie state, so they never run concurrently). The
+        # adapter's token-bucket still bounds the real request rate across all
+        # concurrent suites, so parallelism cuts wall-clock without exceeding the
+        # profile's rate limit.
+        results_by_cat: dict[RiskCategory, CategoryResult] = {}
+        parallel_specs: list[tuple[RiskCategory, Any, TesterMetadata]] = []
+        sequential_specs: list[tuple[RiskCategory, Any, TesterMetadata]] = []
 
-        included_set = {c.category for c in included}
+        for category in RiskCategory:
+            disp = self._category_disposition(
+                category, registry, plan, cli_filter, profile_transport, profile_caps,
+            )
+            if disp[0] == "skip":
+                results_by_cat[category] = disp[1]
+            else:
+                _, entry, meta = disp
+                if meta.requires_clean_state or meta.multi_turn:
+                    sequential_specs.append((category, entry, meta))
+                else:
+                    parallel_specs.append((category, entry, meta))
 
         try:
-            for category in RiskCategory:
-                entry = registry.get(category)
-                category_result = CategoryResult(category=category, category_name=category.title)
+            # ── Parallel phase: stateless single-turn suites ────────────────
+            if parallel_specs:
+                sem = asyncio.Semaphore(max(1, MAX_CONCURRENT_SUITES))
 
-                # CLI --category filter
-                if cli_filter is not None and category not in cli_filter:
-                    category_result.findings.append(_skip_finding(
-                        category, TestStatus.SKIPPED_CATEGORY_FILTER,
-                        "Excluded by --category filter",
-                    ))
-                    category_result.compute_stats()
-                    report.categories.append(category_result)
-                    continue
+                async def _guarded(cat: RiskCategory, entry: Any, meta: TesterMetadata):
+                    async with sem:
+                        return cat, await self._execute_category(cat, entry, meta, adapter, llm_context)
 
-                # Plan-level skip (planner already filtered)
-                cat_plan = plan.find(category) if hasattr(plan, "find") else None
-                if cat_plan is not None and not cat_plan.include:
-                    # Promote to a specific sub-status when the planner skipped
-                    # for a recognizable reason so reports surface the WHY.
-                    reason = cat_plan.skip_reason or "Skipped by planner"
-                    status = TestStatus.SKIPPED
-                    if "lacks" in reason.lower() or "capabilit" in reason.lower():
-                        status = TestStatus.SKIPPED_CAPABILITY
-                    category_result.findings.append(_skip_finding(category, status, reason))
-                    category_result.compute_stats()
-                    report.categories.append(category_result)
-                    continue
-
-                # No tester implementation registered
-                if entry is None:
-                    category_result.findings.append(_skip_finding(
-                        category, TestStatus.SKIPPED,
-                        "No tester implementation registered for this category",
-                    ))
-                    category_result.compute_stats()
-                    report.categories.append(category_result)
-                    continue
-
-                meta: TesterMetadata = entry.metadata
-
-                # Transport gating
-                if profile_transport not in meta.applicable_transports:
-                    category_result.findings.append(_skip_finding(
-                        category, TestStatus.SKIPPED_TRANSPORT,
-                        f"Tester does not support transport {profile_transport.value}",
-                    ))
-                    category_result.compute_stats()
-                    report.categories.append(category_result)
-                    continue
-
-                # Capability gating — only skip when profile has SOME caps AND none overlap.
-                if (
-                    meta.required_capabilities
-                    and profile_caps
-                    and not (profile_caps & set(meta.required_capabilities))
+                logger.info(
+                    "running %d stateless suites concurrently (<=%d in flight); "
+                    "%d clean-state/multi-turn suites run sequentially",
+                    len(parallel_specs), MAX_CONCURRENT_SUITES, len(sequential_specs),
+                )
+                for cat, res in await asyncio.gather(
+                    *[_guarded(c, e, m) for c, e, m in parallel_specs]
                 ):
-                    category_result.findings.append(_skip_finding(
-                        category, TestStatus.SKIPPED_CAPABILITY,
-                        f"Profile lacks any of {sorted(c.value for c in meta.required_capabilities)}",
-                    ))
-                    category_result.compute_stats()
-                    report.categories.append(category_result)
-                    continue
+                    results_by_cat[cat] = res
 
-                # Construct the tester with the adapter injected. Base
-                # tester routes send_ask/send_to_endpoint through the
-                # adapter when present (legacy testers transparently work
-                # against an AgentProfile target).
-                cat_start = time.perf_counter()
-                try:
-                    tester = entry.cls(
-                        client=self.client,
-                        config=getattr(self, "config", None),
-                        baseline=self.baseline,
-                        callback_url=self.callback_server.callback_url if self.callback_server else "",
-                        adapter=adapter,
-                    )
-                    # Inject LLM context (testers that opt in use it; others ignore).
-                    if llm_context is not None:
-                        setattr(tester, "llm_context", llm_context)
-
-                    if meta.multi_turn:
-                        handle = await adapter.open_session()
-                        try:
-                            result = await tester.run_tests(session=handle) if _accepts_session(tester) else await tester.run_tests()
-                        finally:
-                            await adapter.close_session(handle)
-                    else:
-                        result = await tester.run_tests()
-
-                    result.duration_seconds = time.perf_counter() - cat_start
-                    report.categories.append(result)
-                except TransportNotSupportedError as e:
-                    category_result.findings.append(_skip_finding(
-                        category, TestStatus.SKIPPED_TRANSPORT, str(e),
-                    ))
-                    category_result.compute_stats()
-                    report.categories.append(category_result)
-                except Exception as e:
-                    # Budget-cap exhaustion bubbles up — mark this category and
-                    # all REMAINING categories as SKIPPED_BUDGET, then stop.
-                    if e.__class__.__name__ == "BudgetExceededError":
-                        logger.warning("budget exhausted at %s; remaining categories will skip", category.value)
-                        category_result.findings.append(_skip_finding(
-                            category, TestStatus.SKIPPED_BUDGET, str(e),
-                        ))
-                        category_result.compute_stats()
-                        report.categories.append(category_result)
-                        # Drain remaining categories as SKIPPED_BUDGET.
-                        remaining = [c for c in RiskCategory if c.value > category.value and c not in {cr.category for cr in report.categories}]
-                        for rcat in remaining:
-                            rc = CategoryResult(category=rcat, category_name=rcat.title)
-                            rc.findings.append(_skip_finding(rcat, TestStatus.SKIPPED_BUDGET, "budget exhausted earlier in scan"))
-                            rc.compute_stats()
-                            report.categories.append(rc)
-                        break
-                    logger.error(f"{category.value} failed: {e}", exc_info=True)
-                    err_cat = CategoryResult(category=category, category_name=category.title)
-                    err_cat.findings.append(Finding(
-                        test_id=f"{category.value}_runner_error",
-                        test_name="runner_error",
-                        category=category,
-                        status=TestStatus.ERROR,
-                        severity=Severity.INFO,
-                        description=str(e),
-                    ))
-                    err_cat.compute_stats()
-                    report.categories.append(err_cat)
-
+            # ── Sequential phase: clean-state / multi-turn suites ───────────
+            # Run last and one-at-a-time so a crashing/DoSing or session-mutating
+            # tester can't poison a concurrently-running one.
+            for category, entry, meta in sequential_specs:
+                results_by_cat[category] = await self._execute_category(
+                    category, entry, meta, adapter, llm_context,
+                )
                 if meta.requires_clean_state:
                     try:
                         await adapter.reset_session()
@@ -453,6 +363,11 @@ class SecurityTestRunner:
                 await adapter.close()
             except Exception:
                 pass
+
+        # Emit categories in stable RiskCategory order for deterministic reports.
+        for category in RiskCategory:
+            if category in results_by_cat:
+                report.categories.append(results_by_cat[category])
 
         # Post-scan LLM triage pass: any findings whose detector confidence
         # lands in the ambiguity band get a second-opinion verdict from the
@@ -471,6 +386,146 @@ class SecurityTestRunner:
             await self._save_results(report, Path(output_dir))
 
         return report
+
+    def _category_disposition(
+        self,
+        category: RiskCategory,
+        registry: Any,
+        plan: Any,
+        cli_filter: set[RiskCategory] | None,
+        profile_transport: Any,
+        profile_caps: set,
+    ) -> tuple:
+        """Decide a category's fate WITHOUT running it (Gap #6 partitioning).
+
+        Returns ``("skip", CategoryResult)`` for a gated-out category, or
+        ``("run", entry, meta)`` for one that should execute. Pure/synchronous —
+        no network — so it's safe to call for every category up front.
+        """
+        from models.enums import TestStatus
+
+        entry = registry.get(category)
+
+        def _skip(status: Any, reason: str) -> tuple:
+            cr = CategoryResult(category=category, category_name=category.title)
+            cr.findings.append(_skip_finding(category, status, reason))
+            cr.compute_stats()
+            return ("skip", cr)
+
+        # CLI --category filter
+        if cli_filter is not None and category not in cli_filter:
+            return _skip(TestStatus.SKIPPED_CATEGORY_FILTER, "Excluded by --category filter")
+
+        # Plan-level skip (planner already filtered)
+        cat_plan = plan.find(category) if hasattr(plan, "find") else None
+        if cat_plan is not None and not cat_plan.include:
+            reason = cat_plan.skip_reason or "Skipped by planner"
+            status = TestStatus.SKIPPED
+            if "lacks" in reason.lower() or "capabilit" in reason.lower():
+                status = TestStatus.SKIPPED_CAPABILITY
+            return _skip(status, reason)
+
+        # No tester implementation registered
+        if entry is None:
+            return _skip(TestStatus.SKIPPED, "No tester implementation registered for this category")
+
+        meta: TesterMetadata = entry.metadata
+
+        # Transport gating
+        if profile_transport not in meta.applicable_transports:
+            return _skip(
+                TestStatus.SKIPPED_TRANSPORT,
+                f"Tester does not support transport {profile_transport.value}",
+            )
+
+        # Capability gating — only skip when profile has SOME caps AND none overlap.
+        if (
+            meta.required_capabilities
+            and profile_caps
+            and not (profile_caps & set(meta.required_capabilities))
+        ):
+            return _skip(
+                TestStatus.SKIPPED_CAPABILITY,
+                f"Profile lacks any of {sorted(c.value for c in meta.required_capabilities)}",
+            )
+
+        return ("run", entry, meta)
+
+    async def _execute_category(
+        self,
+        category: RiskCategory,
+        entry: Any,
+        meta: TesterMetadata,
+        adapter: Any,
+        llm_context: Any | None,
+    ) -> CategoryResult:
+        """Construct and run one tester; return its CategoryResult.
+
+        Never raises: transport/budget/other errors are converted into a result
+        finding so that a failure in one concurrently-running suite can't abort
+        the whole ``asyncio.gather``.
+
+        Budget note: on ``BudgetExceededError`` only THIS suite is marked
+        SKIPPED_BUDGET. Under parallel execution there's no well-defined "remaining"
+        set to pre-emptively drain — other in-flight suites hit the same cap and
+        skip themselves fast.
+        """
+        from core.target_adapter import TransportNotSupportedError
+        from models.enums import Severity, TestStatus
+        from models.test_result import Finding
+
+        cat_start = time.perf_counter()
+        try:
+            tester = entry.cls(
+                client=self.client,
+                config=getattr(self, "config", None),
+                baseline=self.baseline,
+                callback_url=self.callback_server.callback_url if self.callback_server else "",
+                adapter=adapter,
+            )
+            # Inject LLM context (testers that opt in use it; others ignore).
+            if llm_context is not None:
+                setattr(tester, "llm_context", llm_context)
+
+            if meta.multi_turn:
+                handle = await adapter.open_session()
+                try:
+                    result = (
+                        await tester.run_tests(session=handle)
+                        if _accepts_session(tester)
+                        else await tester.run_tests()
+                    )
+                finally:
+                    await adapter.close_session(handle)
+            else:
+                result = await tester.run_tests()
+
+            result.duration_seconds = time.perf_counter() - cat_start
+            return result
+        except TransportNotSupportedError as e:
+            cr = CategoryResult(category=category, category_name=category.title)
+            cr.findings.append(_skip_finding(category, TestStatus.SKIPPED_TRANSPORT, str(e)))
+            cr.compute_stats()
+            return cr
+        except Exception as e:
+            if e.__class__.__name__ == "BudgetExceededError":
+                logger.warning("budget exhausted at %s; suite skipped", category.value)
+                cr = CategoryResult(category=category, category_name=category.title)
+                cr.findings.append(_skip_finding(category, TestStatus.SKIPPED_BUDGET, str(e)))
+                cr.compute_stats()
+                return cr
+            logger.error(f"{category.value} failed: {e}", exc_info=True)
+            cr = CategoryResult(category=category, category_name=category.title)
+            cr.findings.append(Finding(
+                test_id=f"{category.value}_runner_error",
+                test_name="runner_error",
+                category=category,
+                status=TestStatus.ERROR,
+                severity=Severity.INFO,
+                description=str(e),
+            ))
+            cr.compute_stats()
+            return cr
 
     async def _establish_baseline_v3(self, adapter: Any) -> BaselineProfile:
         """Measure chat latency so DoS testers get a relative threshold.

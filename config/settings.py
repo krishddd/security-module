@@ -12,6 +12,13 @@ SAMPLE_CONFIGS_DIR = BASE_DIR / "sample_configs"
 # Concurrency — critical for local LLM environments
 MAX_CONCURRENT_REQUESTS = int(os.getenv("ASI_MAX_CONCURRENT", "2"))
 
+# How many stateless suites may run concurrently in a v3 scan. The adapter's
+# token-bucket still throttles the actual request rate; this only bounds how many
+# suites are in flight at once. Clean-state / multi-turn suites always run
+# sequentially regardless (they need isolated session state). Set to 1 to force
+# fully-sequential execution.
+MAX_CONCURRENT_SUITES = int(os.getenv("ASI_MAX_CONCURRENT_SUITES", "6"))
+
 # HTTP client
 DEFAULT_TIMEOUT_S = float(os.getenv("ASI_TIMEOUT_S", "240"))
 DEFAULT_BASE_URL = os.getenv("ASI_BASE_URL", "http://localhost:8080")
@@ -58,6 +65,14 @@ OPENAI_MODEL_TRIAGE  = os.getenv("ASI_OPENAI_MODEL_TRIAGE",  "gpt-4o-mini")
 ANTHROPIC_MODEL_PLANNER = os.getenv("ASI_ANTHROPIC_MODEL_PLANNER", "claude-opus-4-7")
 ANTHROPIC_MODEL_PAYLOAD = os.getenv("ASI_ANTHROPIC_MODEL_PAYLOAD", "claude-sonnet-4-6")
 ANTHROPIC_MODEL_TRIAGE  = os.getenv("ASI_ANTHROPIC_MODEL_TRIAGE",  "claude-sonnet-4-6")
+
+# Ollama (local / air-gapped) — talks to a local Ollama server over HTTP, no
+# API key. Base URL honors OLLAMA_HOST (Ollama's own convention) then our
+# ASI_OLLAMA_BASE_URL, defaulting to the standard local port.
+OLLAMA_BASE_URL = os.getenv("ASI_OLLAMA_BASE_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+OLLAMA_MODEL_PLANNER = os.getenv("ASI_OLLAMA_MODEL_PLANNER", "llama3.1")
+OLLAMA_MODEL_PAYLOAD = os.getenv("ASI_OLLAMA_MODEL_PAYLOAD", "llama3.1")
+OLLAMA_MODEL_TRIAGE  = os.getenv("ASI_OLLAMA_MODEL_TRIAGE",  "llama3.1")
 
 # Prompt-cache breakpoint TTL (seconds). The Anthropic cache TTL is 5 min by
 # default; this constant only documents the assumption we depend on.
