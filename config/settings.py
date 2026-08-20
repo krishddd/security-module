@@ -12,6 +12,13 @@ SAMPLE_CONFIGS_DIR = BASE_DIR / "sample_configs"
 # Concurrency — critical for local LLM environments
 MAX_CONCURRENT_REQUESTS = int(os.getenv("ASI_MAX_CONCURRENT", "2"))
 
+# How many stateless suites may run concurrently in a v3 scan. The adapter's
+# token-bucket still throttles the actual request rate; this only bounds how many
+# suites are in flight at once. Clean-state / multi-turn suites always run
+# sequentially regardless (they need isolated session state). Set to 1 to force
+# fully-sequential execution.
+MAX_CONCURRENT_SUITES = int(os.getenv("ASI_MAX_CONCURRENT_SUITES", "6"))
+
 # HTTP client
 DEFAULT_TIMEOUT_S = float(os.getenv("ASI_TIMEOUT_S", "240"))
 DEFAULT_BASE_URL = os.getenv("ASI_BASE_URL", "http://localhost:8080")

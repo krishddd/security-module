@@ -243,6 +243,15 @@ from the runner and drive it with `self.conversation(session)`. Because
 `ConversationSession` goes through the adapter, multi-turn chains work
 unchanged over REST, SSE, **or** WebSocket.
 
+**Parallel execution.** The runner partitions a scan: **stateless single-turn**
+suites run concurrently (`asyncio.gather`, bounded by `ASI_MAX_CONCURRENT_SUITES`,
+default 6), while **clean-state** (`requires_clean_state`) and **multi-turn**
+suites run sequentially and in isolation — they mutate session/cookie state or
+may DoS the target, so they must not overlap. The adapter's token-bucket still
+caps the real request rate across all in-flight suites, so parallelism cuts
+wall-clock time without breaching the profile's rate limit. Set
+`ASI_MAX_CONCURRENT_SUITES=1` to force fully-sequential execution.
+
 ---
 
 ## 🎯 Threat Classes Covered
