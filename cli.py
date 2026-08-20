@@ -593,6 +593,12 @@ def preflight_cmd(
 @click.option("--dry-run", is_flag=True, help="Print every payload that WOULD be sent; make zero network calls")
 @click.option("--category", "-k", type=click.Choice(CATEGORY_CHOICES, case_sensitive=False), multiple=True)
 @click.option("--llm", is_flag=True, help="Enable LLM payload synthesis + triage (Phase 6 — currently no-op)")
+@click.option(
+    "--llm-provider",
+    type=click.Choice(["auto", "anthropic", "openai", "ollama"], case_sensitive=False),
+    default="auto", show_default=True,
+    help="LLM backend for --llm. 'ollama' runs fully local/air-gapped (needs a running Ollama server, no API key).",
+)
 @click.option("--max-llm-calls", type=int, default=None)
 @click.option("--max-llm-spend-usd", type=float, default=None)
 @click.option("--rate-limit-rpm", type=int, default=None)
@@ -610,6 +616,7 @@ def scan_v3_cmd(
     dry_run: bool,
     category: tuple[str, ...],
     llm: bool,
+    llm_provider: str,
     max_llm_calls: int | None,
     max_llm_spend_usd: float | None,
     rate_limit_rpm: int | None,
@@ -667,6 +674,7 @@ def scan_v3_cmd(
                 llm_context = LLMContext.enable(
                     max_calls=max_llm_calls,
                     max_spend_usd=max_llm_spend_usd,
+                    provider=llm_provider.lower(),
                 )
                 console.print(
                     f"[dim]LLM enabled — provider={llm_context.provider}, "

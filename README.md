@@ -147,12 +147,13 @@ graph TB
 
     subgraph LLM["llm/"]
         planner_llm["planner.py\nAttack plan assembly"]
-        client["client.py\nLLM client"]
+        client["client.py\nAnthropic (Claude) provider"]
         openai["openai_client.py\nOpenAI provider"]
+        ollama["ollama_client.py\nOllama (local/air-gapped)"]
         synthesizer["payload_synthesizer.py\nPayload generation"]
         triage["triage.py\nVerdict triaging"]
         budget["budget.py\nSpend tracking"]
-        context["context.py\nSession context"]
+        context["context.py\nProvider registry + session"]
     end
 
     subgraph Disc["discovery/"]
@@ -197,6 +198,9 @@ graph TB
     client --> openai
     synthesizer --> client
     triage --> client
+    context --> client
+    context --> openai
+    context --> ollama
     client --> budget
     runner --> planner_llm
     runner --> stub
@@ -410,7 +414,15 @@ python cli.py plan --profile profile.json --llm --out plan.json
 
 # 3. Run the scan
 python cli.py scan-v3 --profile profile.json --plan plan.json --llm --yes
+
+# Air-gapped: use a local Ollama model instead of a cloud API (no key needed)
+python cli.py scan-v3 --profile profile.json --plan plan.json \
+    --llm --llm-provider ollama --yes
 ```
+
+`--llm-provider` selects the LLM backend: `auto` (default — Anthropic if its key
+is set, else OpenAI), `anthropic`, `openai`, or `ollama` (local, needs a running
+`ollama serve`).
 
 ### Demo Flows
 
@@ -479,12 +491,13 @@ security-module/
 │
 ├── llm/                            # LLM-assisted features (--llm flag)
 │   ├── planner.py                  # Plan assembly from SKILL packs
-│   ├── client.py                   # Provider-agnostic LLM client
-│   ├── openai_client.py            # OpenAI provider
+│   ├── client.py                   # Anthropic (Claude) provider + LLMResponse contract
+│   ├── openai_client.py            # OpenAI (GPT) provider
+│   ├── ollama_client.py            # Ollama local / air-gapped provider (no API key)
 │   ├── payload_synthesizer.py      # LLM-based payload generation
 │   ├── triage.py                   # Batched verdict triaging
 │   ├── budget.py                   # Spend tracking + hard cap
-│   └── context.py                  # LLM session context
+│   └── context.py                  # Provider registry (--llm-provider) + session context
 │
 ├── discovery/                      # Target discovery
 │   ├── openapi_parser.py           # OpenAPI spec parsing

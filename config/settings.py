@@ -66,6 +66,14 @@ ANTHROPIC_MODEL_PLANNER = os.getenv("ASI_ANTHROPIC_MODEL_PLANNER", "claude-opus-
 ANTHROPIC_MODEL_PAYLOAD = os.getenv("ASI_ANTHROPIC_MODEL_PAYLOAD", "claude-sonnet-4-6")
 ANTHROPIC_MODEL_TRIAGE  = os.getenv("ASI_ANTHROPIC_MODEL_TRIAGE",  "claude-sonnet-4-6")
 
+# Ollama (local / air-gapped) — talks to a local Ollama server over HTTP, no
+# API key. Base URL honors OLLAMA_HOST (Ollama's own convention) then our
+# ASI_OLLAMA_BASE_URL, defaulting to the standard local port.
+OLLAMA_BASE_URL = os.getenv("ASI_OLLAMA_BASE_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+OLLAMA_MODEL_PLANNER = os.getenv("ASI_OLLAMA_MODEL_PLANNER", "llama3.1")
+OLLAMA_MODEL_PAYLOAD = os.getenv("ASI_OLLAMA_MODEL_PAYLOAD", "llama3.1")
+OLLAMA_MODEL_TRIAGE  = os.getenv("ASI_OLLAMA_MODEL_TRIAGE",  "llama3.1")
+
 # Prompt-cache breakpoint TTL (seconds). The Anthropic cache TTL is 5 min by
 # default; this constant only documents the assumption we depend on.
 LLM_CACHE_TTL_S = 300

@@ -23,7 +23,7 @@ from llm.triage import LLMTriager
 
 logger = logging.getLogger(__name__)
 
-Provider = Literal["anthropic", "openai", "auto"]
+Provider = Literal["anthropic", "openai", "ollama", "auto"]
 
 
 @dataclass
@@ -55,7 +55,9 @@ class LLMContext:
           2. else ``OPENAI_API_KEY`` present -> OpenAI
           3. else raise ``LLMUnavailableError``
 
-        Force a specific provider with ``provider="anthropic"`` or ``"openai"``.
+        Force a specific provider with ``provider="anthropic"``, ``"openai"``,
+        or ``"ollama"`` (local / air-gapped — needs a running Ollama server,
+        no API key). ``ollama`` is never auto-selected; request it explicitly.
 
         Model selection follows the picked provider — Claude IDs for
         Anthropic, GPT IDs for OpenAI — so the planner/synthesizer/triager
@@ -66,6 +68,7 @@ class LLMContext:
         from config.settings import (
             ANTHROPIC_MODEL_PAYLOAD, ANTHROPIC_MODEL_PLANNER, ANTHROPIC_MODEL_TRIAGE,
             OPENAI_MODEL_PAYLOAD, OPENAI_MODEL_PLANNER, OPENAI_MODEL_TRIAGE,
+            OLLAMA_MODEL_PAYLOAD, OLLAMA_MODEL_PLANNER, OLLAMA_MODEL_TRIAGE,
         )
 
         client, picked = _make_client(provider)
@@ -74,6 +77,8 @@ class LLMContext:
 
         if picked == "openai":
             m_planner, m_payload, m_triage = OPENAI_MODEL_PLANNER, OPENAI_MODEL_PAYLOAD, OPENAI_MODEL_TRIAGE
+        elif picked == "ollama":
+            m_planner, m_payload, m_triage = OLLAMA_MODEL_PLANNER, OLLAMA_MODEL_PAYLOAD, OLLAMA_MODEL_TRIAGE
         else:
             m_planner, m_payload, m_triage = ANTHROPIC_MODEL_PLANNER, ANTHROPIC_MODEL_PAYLOAD, ANTHROPIC_MODEL_TRIAGE
 
@@ -95,6 +100,9 @@ def _make_client(provider: Provider) -> tuple[Any, str]:
     if provider == "openai":
         from llm.openai_client import OpenAIClient
         return OpenAIClient(), "openai"
+    if provider == "ollama":
+        from llm.ollama_client import OllamaClient
+        return OllamaClient(), "ollama"
 
     # auto: prefer Anthropic when both keys are set (better tool-use fidelity
     # in our planner; the user can override by passing provider="openai").
